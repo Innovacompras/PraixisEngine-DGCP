@@ -22,7 +22,49 @@ router = APIRouter(
 )
 
 
-@router.post("/upload")
+@router.post(
+    "/upload",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["files"],
+                        "properties": {
+                            "files": {
+                                "type": "array",
+                                "items": {"type": "string", "format": "binary"},
+                                "description": "One or more .pdf, .docx, or .txt files — max 20 MB each.",
+                            },
+                            "collection_name": {
+                                "type": "string",
+                                "default": "main",
+                                "pattern": r"^[a-zA-Z0-9_-]{3,63}$",
+                                "description": "Target collection name. Defaults to 'main'.",
+                            },
+                            "chunk_size": {
+                                "type": "integer",
+                                "default": 1000,
+                                "minimum": 100,
+                                "maximum": 4000,
+                                "description": "Characters per chunk (100–4000).",
+                            },
+                            "chunk_overlap": {
+                                "type": "integer",
+                                "default": 150,
+                                "minimum": 0,
+                                "maximum": 500,
+                                "description": "Overlap characters between chunks (0–500).",
+                            },
+                        },
+                    }
+                }
+            },
+            "required": True,
+        }
+    },
+)
 @limiter.limit("15/minute")
 async def rag_upload_endpoint(
     request: Request,

@@ -72,6 +72,8 @@ async def handle_rag_upload(
     chunk_size: int = 1000,
     chunk_overlap: int = 150,
 ) -> dict:
+    if chunk_overlap >= chunk_size:
+        raise HTTPException(status_code=422, detail="chunk_overlap must be less than chunk_size.")
     results = []
     for file in files:
         if not file.filename:

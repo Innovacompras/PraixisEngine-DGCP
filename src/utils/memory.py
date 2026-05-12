@@ -5,7 +5,7 @@ import re
 import redis.asyncio as aioredis
 from typing import List, Dict, Tuple
 
-_REDIS = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+_REDIS = os.getenv("REDIS_URL", "rediss://localhost:6379/0")
 redis_client = aioredis.Redis.from_url(_REDIS, decode_responses=True)
 
 # Session expiry in seconds
