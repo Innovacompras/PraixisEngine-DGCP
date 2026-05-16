@@ -159,7 +159,7 @@ async def handle_summarize_document(collection_name: str, filename: str, app_nam
         logger.info(f"Generated {filename} summary for app: {app_name}")
         return {"filename": filename, "summary": summary}
     except GPUBusyError as e:
-        raise HTTPException(status_code=503, detail="Server is too busy. Please try again later.")
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error in handle_summarize_document: {str(e)}")
         raise HTTPException(status_code=500, detail="An error occurred while generating the summary.")
@@ -173,7 +173,7 @@ async def handle_compare_documents(collection_name: str, file_1: str, file_2: st
         logger.info(f"Generated comparison between {file_1} and {file_2} for app: {app_name}")
         return {"file_1": file_1, "file_2": file_2, "comparison": comparison}
     except GPUBusyError as e:
-        raise HTTPException(status_code=503, detail="Server is too busy. Please try again later.")
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error(f"Error in handle_compare_documents: {str(e)}")
         raise HTTPException(status_code=500, detail="An error occurred while generating the comparison.")

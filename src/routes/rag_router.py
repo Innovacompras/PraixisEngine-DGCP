@@ -120,7 +120,7 @@ async def rag_list_files_endpoint(
 @limiter.limit("20/minute")
 async def rag_delete_endpoint(
     request: Request,
-    collection_name: str,
+    collection_name: str = Path(..., pattern=r"^[a-zA-Z0-9_-]{3,63}$"),
     app_name: str = Depends(verify_api_key)
 ):
     return await handle_delete_collection(collection_name=collection_name, app_name=app_name)

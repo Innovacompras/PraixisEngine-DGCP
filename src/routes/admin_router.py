@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from src.dependencies.security import verify_admin_credentials
 from src.controllers.admin_controller import (
     generate_api_key,
@@ -34,7 +34,7 @@ async def list_keys():
 
 
 @router.post("/keys/generate")
-async def create_app_key(app_name: str):
+async def create_app_key(app_name: str = Query(..., pattern=r"^[a-zA-Z0-9_-]{3,63}$")):
     return await generate_api_key(app_name)
 
 

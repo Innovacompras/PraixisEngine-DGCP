@@ -67,15 +67,19 @@ async def generate_rag_answer(
     )
 
     full_answer = ""
-    async for chunk in response:
-        if chunk.choices and chunk.choices[0].delta.content is not None:
-            token = chunk.choices[0].delta.content
-            full_answer += token
-            yield token
-        if getattr(chunk, "usage", None):
-            await record_llm_usage(chunk, app_name)
-
-    await add_message(session_id=active_session_id, role="assistant", content=full_answer, app_name=app_name)
+    usage_recorded = False
+    try:
+        async for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content is not None:
+                token = chunk.choices[0].delta.content
+                full_answer += token
+                yield token
+            if not usage_recorded and getattr(chunk, "usage", None):
+                await record_llm_usage(chunk, app_name)
+                usage_recorded = True
+    finally:
+        if full_answer:
+            await add_message(session_id=active_session_id, role="assistant", content=full_answer, app_name=app_name)
 
 
 async def reformulate_query(history: list, latest_question: str, app_name: str) -> str:

@@ -103,14 +103,18 @@ async def add_file_to_rag_db(
         )
 
         existing = collection.get(where={"source": filename}, include=["metadatas"])
-        if existing and existing.get("metadatas"):
-            collection.delete(where={"source": filename})
+        old_ids: List[str] = existing.get("ids", []) if existing else []
 
         chunks = text_splitter.split_text(text)
-        ids = [f"{filename}_{uuid.uuid4().hex[:6]}" for _ in chunks]
+        new_ids = [f"{filename}_{uuid.uuid4().hex[:6]}" for _ in chunks]
         metadatas: List[Dict[str, Any]] = [{"source": filename, "app": app_name} for _ in chunks]
 
-        collection.add(documents=chunks, metadatas=metadatas, ids=ids)  # type: ignore[arg-type]
+        # Add new chunks first — if this fails, old data is still intact
+        collection.add(documents=chunks, metadatas=metadatas, ids=new_ids)  # type: ignore[arg-type]
+
+        # Remove old chunks only after successful add
+        if old_ids:
+            collection.delete(ids=old_ids)
         return collection_name
 
     return await asyncio.to_thread(_run)

@@ -1,14 +1,15 @@
+from src.utils.load_env import load_env
+
+try:
+    load_env()
+except Exception as e:
+    raise RuntimeError(f"ERROR: Could not load .env file: {e}")
+
 from fastapi import FastAPI
 from slowapi.errors import RateLimitExceeded
 from src.utils.limiter import limiter
 from slowapi.extension import _rate_limit_exceeded_handler
 from src.routes.main_router import api_router
-from src.utils.load_env import load_env
-
-try: 
-    load_env()
-except Exception as e:
-    raise RuntimeError(f"ERROR: Could not load .env file: {e}")
 
 app = FastAPI(
     title="Praixis - Business logic based API",

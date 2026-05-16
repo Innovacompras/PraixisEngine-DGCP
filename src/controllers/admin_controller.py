@@ -39,12 +39,15 @@ async def get_system_stats() -> dict:
     async for _ in redis_client.scan_iter("chat:*"):
         active_sessions += 1
 
-    collections = await asyncio.to_thread(chroma_client.list_collections)
-    total_vectors = sum([col.count() for col in collections])
+    def _count_vectors():
+        cols = chroma_client.list_collections()
+        return len(cols), sum(col.count() for col in cols)
+
+    num_collections, total_vectors = await asyncio.to_thread(_count_vectors)
 
     return {
         "active_chat_sessions": active_sessions,
-        "total_vector_collections": len(collections),
+        "total_vector_collections": num_collections,
         "total_vector_chunks": total_vectors,
     }
 

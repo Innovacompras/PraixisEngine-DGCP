@@ -42,15 +42,19 @@ async def generate_chat_stream(
     yield f"[SESSION_ID:{active_session_id}]\n"
 
     full_ai_response = ""
-    async for chunk in response:
-        if chunk.choices and chunk.choices[0].delta.content is not None:
-            word = chunk.choices[0].delta.content
-            full_ai_response += word
-            yield word
-        if getattr(chunk, "usage", None):
-            await record_llm_usage(chunk, app_name)
-
-    await add_message(session_id=active_session_id, role="assistant", content=full_ai_response, app_name=app_name)
+    usage_recorded = False
+    try:
+        async for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content is not None:
+                word = chunk.choices[0].delta.content
+                full_ai_response += word
+                yield word
+            if not usage_recorded and getattr(chunk, "usage", None):
+                await record_llm_usage(chunk, app_name)
+                usage_recorded = True
+    finally:
+        if full_ai_response:
+            await add_message(session_id=active_session_id, role="assistant", content=full_ai_response, app_name=app_name)
 
 
 async def generate_file_summary(
