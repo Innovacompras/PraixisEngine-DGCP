@@ -47,7 +47,7 @@ Client App (with X-API-Key)
   |  memory.py     (Redis)             |  <- Session storage & API keys
   |  vector_db.py  (ChromaDB)          |  <- Persistent vector store
   |  file_parser.py                    |  <- PDF / DOCX / TXT extraction
-  |  concurrency.py                    |  <- GPU semaphore (BoundedSemaphore)
+  |  concurrency.py                    |  <- GPU slot counter, GPUBusyError
   └────────────────────────────────────┘
 ```
 
@@ -73,7 +73,7 @@ For files that exceed a single context window (used by `/file_summary`):
 
 ```
 Document
-  └── Split into 1,500-word chunks
+  └── Split into chunks (~9,000 chars, respecting paragraph/sentence boundaries)
         └── MAP: Extract relevant info from each chunk
               └── REDUCE: Synthesize all extracted notes into the final result
 ```
@@ -180,6 +180,8 @@ API docs are available at `http://localhost:8080/docs`.
 curl -X POST "http://localhost:8080/api/system/keys/generate?app_name=my-app" \
   -u admin_username:admin_password
 ```
+
+> `app_name` must match `^[a-zA-Z0-9_-]{3,63}$` (alphanumeric, dashes, underscores; 3–63 characters).
 
 Response:
 ```json
@@ -312,7 +314,7 @@ Response: `{"text": "...", "dimensions": 384, "embedding": [0.023, -0.147, ...]}
 | `DELETE` | `/rag-db/delete/{collection}` | Delete an entire collection |
 | `DELETE` | `/rag-db/{collection}/files/{filename}` | Delete a single document from a collection |
 | `GET` | `/rag-db/knowledge_base/{collection}/files/{filename}/summary` | 3-sentence summary of a document |
-| `POST` | `/rag-db/knowledge_base/compare?collection_name=&file_1=&file_2=` | Bullet-point diff between two documents |
+| `POST` | `/rag-db/knowledge_base/compare` | Bullet-point diff between two documents in a collection (JSON body: `collection_name`, `file_1`, `file_2`) |
 
 ---
 
@@ -333,7 +335,7 @@ Response: `{"text": "...", "dimensions": 384, "embedding": [0.023, -0.147, ...]}
 
 ## Rate Limits
 
-All limits are per IP address.
+All limits are per API key (falls back to IP for unauthenticated routes).
 
 | Endpoint | Limit |
 |---|---|
