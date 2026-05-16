@@ -5,7 +5,7 @@ from src.utils.file_parser import extract_text_from_file
 from src.services.chat_service import generate_chat_stream, generate_file_summary
 from src.utils.memory import delete_session, get_all_active_sessions, get_session_history
 from src.utils.logger import logger
-from src.utils.concurrency import GPUBusyError, acquire_gpu_slot, release_gpu_slot
+from src.utils.concurrency import GPUBusyError, acquire_gpu_slot
 
 _MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
@@ -16,26 +16,17 @@ async def handle_chat(request: ChatRequest, app_name: str) -> StreamingResponse:
     except GPUBusyError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-    async def _stream():
-        try:
-            async for token in generate_chat_stream(
-                app_name=app_name,
-                prompt=request.prompt,
-                system_prompt=request.system_prompt,
-                session_id=request.session_id,
-                response_format=request.response_format,
-            ):
-                yield token
-        finally:
-            await release_gpu_slot()
-
-    try:
-        logger.info(f"Received chat request for app: {app_name}, session: {request.session_id}")
-        return StreamingResponse(_stream(), media_type="text/event-stream")
-    except Exception as e:
-        await release_gpu_slot()
-        logger.error(f"Error in handle_chat: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.info(f"Received chat request for app: {app_name}, session: {request.session_id}")
+    return StreamingResponse(
+        generate_chat_stream(
+            app_name=app_name,
+            prompt=request.prompt,
+            system_prompt=request.system_prompt,
+            session_id=request.session_id,
+            response_format=request.response_format,
+        ),
+        media_type="text/event-stream",
+    )
 
 
 async def handle_file_summary(file: UploadFile, task: str, tone: str, app_name: str) -> StreamingResponse:
@@ -62,21 +53,18 @@ async def handle_file_summary(file: UploadFile, task: str, tone: str, app_name: 
 
     filename = file.filename
 
-    async def _stream():
-        try:
-            yield f"[FILE:{filename}]\n"
-            async for token in generate_file_summary(
-                document_text=document_text,
-                task=task,
-                tone=tone,
-                app_name=app_name,
-            ):
-                yield token
-        finally:
-            await release_gpu_slot()
+    async def _with_file_header():
+        yield f"[FILE:{filename}]\n"
+        async for token in generate_file_summary(
+            document_text=document_text,
+            task=task,
+            tone=tone,
+            app_name=app_name,
+        ):
+            yield token
 
     logger.info(f"Streaming file summary for app: {app_name}, file: {filename}")
-    return StreamingResponse(_stream(), media_type="text/event-stream")
+    return StreamingResponse(_with_file_header(), media_type="text/event-stream")
 
 
 async def handle_fetch_history(session_id: str, app_name: str) -> dict:

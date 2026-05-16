@@ -17,3 +17,8 @@ class QuestionRequest(BaseModel):
 
 class EmbedRequest(BaseModel):
     text: str = Field(..., min_length=1)
+
+class CompareRequest(BaseModel):
+    collection_name: str = Field(..., pattern=r"^[a-zA-Z0-9_-]{3,63}$")
+    file_1: str = Field(..., min_length=1)
+    file_2: str = Field(..., min_length=1)

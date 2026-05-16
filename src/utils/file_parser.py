@@ -1,6 +1,7 @@
 import io
 from pypdf import PdfReader
 import docx
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 def extract_text_from_file(filename: str, file_content: bytes) -> str:
     """Reads raw file bytes and extracts text based on the file extension."""
@@ -31,11 +32,10 @@ def extract_text_from_file(filename: str, file_content: bytes) -> str:
     return text
 
 def chunk_text(text: str, max_words_per_chunk: int = 1000) -> list[str]:
-    words = text.split()
-    chunks = []
-    
-    for i in range(0, len(words), max_words_per_chunk):
-        chunk = " ".join(words[i : i + max_words_per_chunk])
-        chunks.append(chunk)
-        
-    return chunks
+    chunk_size = max_words_per_chunk * 6  # ~6 chars per average word
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=max(100, chunk_size // 15),
+        separators=["\n\n", "\n", ". ", " ", ""],
+    )
+    return splitter.split_text(text) or []

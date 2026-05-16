@@ -16,7 +16,7 @@ from src.utils.vector_db import (
 )
 from src.utils.memory import get_session_history
 from src.utils.logger import logger
-from src.utils.concurrency import GPUBusyError, acquire_gpu_slot, release_gpu_slot
+from src.utils.concurrency import GPUBusyError, acquire_gpu_slot
 
 _MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
@@ -126,30 +126,21 @@ async def handle_rag_question(request: QuestionRequest, app_name: str) -> Stream
 
     try:
         await acquire_gpu_slot()
-    except GPUBusyError:
-        raise HTTPException(status_code=503, detail="Server is too busy. Please try again later.")
+    except GPUBusyError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
-    async def _stream():
-        try:
-            async for token in generate_rag_answer(
-                question=request.question,
-                app_name=app_name,
-                context_chunks=relevant_chunks,
-                search_query=search_query,
-                session_id=request.session_id,
-                system_prompt=request.system_prompt,
-            ):
-                yield token
-        finally:
-            await release_gpu_slot()
-
-    try:
-        logger.info(f"Streaming RAG answer for app: {app_name}, collection: {request.collection_name}")
-        return StreamingResponse(_stream(), media_type="text/event-stream")
-    except Exception as e:
-        await release_gpu_slot()
-        logger.error(f"Error in handle_rag_question: {str(e)}")
-        raise HTTPException(status_code=500, detail="RAG answer generation error")
+    logger.info(f"Streaming RAG answer for app: {app_name}, collection: {request.collection_name}")
+    return StreamingResponse(
+        generate_rag_answer(
+            question=request.question,
+            app_name=app_name,
+            context_chunks=relevant_chunks,
+            search_query=search_query,
+            session_id=request.session_id,
+            system_prompt=request.system_prompt,
+        ),
+        media_type="text/event-stream",
+    )
 
 
 async def handle_summarize_document(collection_name: str, filename: str, app_name: str) -> dict:

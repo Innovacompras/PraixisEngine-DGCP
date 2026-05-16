@@ -3,7 +3,7 @@ from typing import AsyncGenerator
 from src.utils.ai_client import get_async_ai_client, record_llm_usage
 from src.utils.file_parser import chunk_text
 from src.utils.memory import add_message, get_or_create_session
-from src.utils.concurrency import gpu_slot
+from src.utils.concurrency import gpu_slot, release_gpu_slot
 
 _client = get_async_ai_client()
 _MODEL_NAME = os.getenv("MODEL_NAME", "gemma-api-test")
@@ -80,6 +80,7 @@ async def generate_rag_answer(
     finally:
         if full_answer:
             await add_message(session_id=active_session_id, role="assistant", content=full_answer, app_name=app_name)
+        await release_gpu_slot()
 
 
 async def reformulate_query(history: list, latest_question: str, app_name: str) -> str:

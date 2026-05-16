@@ -4,6 +4,7 @@ import json
 import re
 import redis.asyncio as aioredis
 from typing import List, Dict, Tuple
+from src.utils.logger import logger
 
 _REDIS = os.getenv("REDIS_URL", "rediss://localhost:6379/0")
 redis_client = aioredis.Redis.from_url(_REDIS, decode_responses=True)
@@ -46,12 +47,16 @@ async def get_or_create_session(
         if isinstance(stored_data, str):
             history = json.loads(stored_data)
 
-            if system_prompt and len(history) > 0 and history[0].get("role") == "system":
-                history[0]["content"] = system_prompt
-                await redis_client.setex(redis_key, _SESSION_TTL, json.dumps(history))
-            else:
-                await redis_client.expire(redis_key, _SESSION_TTL)
+            if (system_prompt
+                    and len(history) > 0
+                    and history[0].get("role") == "system"
+                    and history[0]["content"] != system_prompt):
+                logger.warning(
+                    f"Ignoring system_prompt override for existing session {session_id} "
+                    f"(app: {app_name}). System prompt is fixed at session creation."
+                )
 
+            await redis_client.expire(redis_key, _SESSION_TTL)
             return session_id, history
 
     new_session_id = uuid.uuid4().hex

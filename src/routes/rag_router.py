@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, File, Path, Request, UploadFile, Form
 from src.dependencies.security import verify_api_key
-from src.models.schemas import EmbedRequest, QuestionRequest
+from src.models.schemas import CompareRequest, EmbedRequest, QuestionRequest
 from src.controllers.rag_controller import (
     handle_rag_upload,
     handle_compare_documents,
@@ -141,12 +141,15 @@ async def rag_delete_file_endpoint(
 @limiter.limit("5/minute")
 async def rag_compare_documents(
     request: Request,
-    collection_name: str,
-    file_1: str,
-    file_2: str,
+    compare_request: CompareRequest,
     app_name: str = Depends(verify_api_key)
 ):
-    return await handle_compare_documents(collection_name=collection_name, file_1=file_1, file_2=file_2, app_name=app_name)
+    return await handle_compare_documents(
+        collection_name=compare_request.collection_name,
+        file_1=compare_request.file_1,
+        file_2=compare_request.file_2,
+        app_name=app_name,
+    )
 
 
 @router.get("/knowledge_base/{collection_name}/files/{filename}/summary")
