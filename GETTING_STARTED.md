@@ -70,7 +70,7 @@ API docs are available at `http://localhost:8080/docs`.
 
 ## Running with Docker
 
-Make sure Docker is running. The project includes a `Makefile` with two modes.
+Make sure Docker is running. The project includes a `Makefile` with two modes. `make` is built-in on macOS/Linux. On Windows, install it via [Chocolatey](https://chocolatey.org/) (`choco install make`) or use the manual commands shown below instead.
 
 ### Local stack — app + Redis in Docker
 
@@ -164,6 +164,6 @@ Save this ID and pass it as `session_id` in follow-up messages to continue the c
 
 ## Next Steps
 
-- Upload documents and ask questions: see **RAG** endpoints in [README.md](README.md#rag-upload----post-rag-dbupload)
+- Upload documents and ask questions: see **RAG** endpoints in [README.md](README.md#api-reference)
 - Check system health: `GET /api/system/health` (admin credentials required)
 - Review all endpoints: [README.md → API Reference](README.md#api-reference)

@@ -299,7 +299,7 @@ Response:
 | `GET` | `/api/system/stats` | Active sessions, collection count, total vector chunks |
 | `GET` | `/api/system/keys` | List all provisioned keys (preview + created_at) and their app names |
 | `POST` | `/api/system/keys/generate?app_name=` | Generate a new API key |
-| `DELETE` | `/api/system/keys/revoke?api_key=` | Permanently revoke an API key |
+| `DELETE` | `/api/system/keys/revoke?api_key=` | Permanently revoke an API key (pass the full plaintext key, not the preview) |
 | `DELETE` | `/api/system/sessions/{app_name}` | Force-wipe all active sessions for a specific app |
 | `GET` | `/api/system/usage` | Token usage totals across all apps |
 | `GET` | `/api/system/usage/{app_name}` | Token usage totals for a specific app |
