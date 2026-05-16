@@ -17,6 +17,7 @@ from src.utils.vector_db import (
 from src.utils.memory import get_session_history
 from src.utils.logger import logger
 from src.utils.concurrency import GPUBusyError, acquire_gpu_slot
+from src.utils.audit import log_event
 
 _MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
@@ -50,6 +51,7 @@ async def handle_delete_collection(collection_name: str, app_name: str) -> dict:
         logger.warning(f"Collection not found for deletion for app: {app_name}, collection: {collection_name}")
         raise HTTPException(status_code=404, detail=f"Collection '{collection_name}' does not exist or was already deleted.")
     logger.info(f"Deleted collection: {collection_name} for app: {app_name}")
+    await log_event("COLLECTION_DELETED", {"collection": collection_name}, app_name=app_name)
     return {"status": "success", "message": f"The collection '{collection_name}' has been permanently deleted."}
 
 
@@ -57,6 +59,7 @@ async def handle_delete_file(collection_name: str, filename: str, app_name: str)
     try:
         await delete_file_from_collection(collection_name=collection_name, filename=filename, app_name=app_name)
         logger.info(f"Deleted file: {filename} from collection: {collection_name} for app: {app_name}")
+        await log_event("FILE_DELETED", {"filename": filename, "collection": collection_name}, app_name=app_name)
         return {"status": "success", "message": f"All data for '{filename}' has been permanently removed from '{collection_name}'."}
     except ValueError as ve:
         logger.warning(f"Value error in handle_delete_file: {str(ve)}")
@@ -97,6 +100,7 @@ async def handle_rag_upload(
                 chunk_overlap=chunk_overlap,
             )
             logger.info(f"Batch uploaded file: {file.filename} to collection: {collection_name} for app: {app_name}")
+            await log_event("FILE_UPLOADED", {"filename": file.filename, "collection": collection_name}, app_name=app_name)
             results.append({"filename": file.filename, "status": "success"})
         except ValueError as ve:
             results.append({"filename": file.filename, "status": "error", "detail": str(ve)})

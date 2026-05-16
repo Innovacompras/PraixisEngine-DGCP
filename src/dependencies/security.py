@@ -4,7 +4,8 @@ import secrets
 from fastapi import Depends, Security, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.security.api_key import APIKeyHeader
-from src.utils.memory import redis_client
+from src.utils.memory import lookup_api_key
+from src.utils.audit import log_event
 from src.utils.logger import logger
 
 _API_KEY_NAME = "X-API-Key"
@@ -12,19 +13,20 @@ _api_key_header = APIKeyHeader(name=_API_KEY_NAME, auto_error=False)
 
 
 async def verify_api_key(api_key: str = Security(_api_key_header)) -> str:
-    """Checks Redis for the API Key and returns the associated App Name."""
+    """Checks Redis for the API Key (by SHA-256 hash) and returns the associated App Name."""
     if not api_key:
         logger.warning("Request done without an API Key.")
         raise HTTPException(status_code=403, detail="API Key header missing.")
 
-    app_name = await redis_client.get(f"apikey:{api_key}")
+    app_name = await lookup_api_key(api_key)
 
     if not app_name:
         logger.warning("Invalid API Key attempted.")
+        await log_event("AUTH_FAIL", {"key_preview": api_key[:14] + "..." if len(api_key) > 14 else "***"})
         raise HTTPException(status_code=403, detail="Invalid or revoked API Key.")
 
     logger.info(f"API Key authenticated for app: {app_name}")
-    return str(app_name)
+    return app_name
 
 
 _security_basic = HTTPBasic()

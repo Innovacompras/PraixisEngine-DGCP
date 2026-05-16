@@ -2,6 +2,8 @@ import uuid
 import os
 import json
 import re
+import hashlib
+import datetime
 import redis.asyncio as aioredis
 from typing import List, Dict, Tuple
 from src.utils.logger import logger
@@ -131,6 +133,50 @@ async def get_all_app_names() -> list[str]:
         if len(parts) >= 2:
             app_names.add(parts[1])
     return list(app_names)
+
+
+def _hash_api_key(raw_key: str) -> str:
+    return hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+async def store_api_key(full_key: str, app_name: str) -> None:
+    value = json.dumps({
+        "app_name": app_name,
+        "key_preview": full_key[:14] + "...",
+        "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
+    })
+    await redis_client.set(f"apikey:{_hash_api_key(full_key)}", value)
+
+
+async def lookup_api_key(full_key: str) -> str | None:
+    data = await redis_client.get(f"apikey:{_hash_api_key(full_key)}")
+    if not isinstance(data, str):
+        return None
+    try:
+        return json.loads(data).get("app_name")
+    except json.JSONDecodeError:
+        return None
+
+
+async def remove_api_key(full_key: str) -> bool:
+    return await redis_client.delete(f"apikey:{_hash_api_key(full_key)}") > 0  # type: ignore[operator]
+
+
+async def list_all_api_keys() -> list[dict]:
+    entries: list[dict] = []
+    async for redis_key in redis_client.scan_iter("apikey:*"):
+        raw = await redis_client.get(redis_key)
+        if isinstance(raw, str):
+            try:
+                data = json.loads(raw)
+                entries.append({
+                    "app_name": data.get("app_name"),
+                    "key_preview": data.get("key_preview"),
+                    "created_at": data.get("created_at"),
+                })
+            except (json.JSONDecodeError, AttributeError):
+                pass
+    return entries
 
 
 async def delete_all_app_sessions(app_name: str) -> int:

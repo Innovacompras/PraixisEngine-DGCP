@@ -9,6 +9,10 @@ from src.controllers.admin_controller import (
     list_api_keys,
     revoke_api_key,
     delete_app_sessions,
+    get_gpu,
+    reset_gpu,
+    get_global_audit,
+    get_app_audit,
 )
 
 router = APIRouter(
@@ -56,3 +60,30 @@ async def all_usage():
 @router.get("/usage/{app_name}")
 async def app_usage(app_name: str):
     return await get_app_usage(app_name)
+
+
+@router.get("/gpu")
+async def gpu_status():
+    return await get_gpu()
+
+
+@router.post("/gpu/reset")
+async def reset_gpu_slots():
+    return await reset_gpu()
+
+
+@router.get("/audit")
+async def global_audit(
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+):
+    return await get_global_audit(limit=limit, offset=offset)
+
+
+@router.get("/audit/{app_name}")
+async def app_audit(
+    app_name: str,
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+):
+    return await get_app_audit(app_name=app_name, limit=limit, offset=offset)

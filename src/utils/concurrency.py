@@ -1,8 +1,9 @@
 import os
 from contextlib import asynccontextmanager
+from src.utils.memory import redis_client
 
 _SLOTS = int(os.getenv("GPU_CONCURRENCY", "2"))
-_in_use: int = 0
+_GPU_KEY = "gpu:in_use"
 
 
 class GPUBusyError(Exception):
@@ -13,30 +14,41 @@ class GPUBusyError(Exception):
 @asynccontextmanager
 async def gpu_slot():
     """Async context manager for non-streaming LLM calls. Raises GPUBusyError immediately if full."""
-    global _in_use
-    if _in_use >= _SLOTS:
+    count = await redis_client.incr(_GPU_KEY)
+    if count > _SLOTS:
+        await redis_client.decr(_GPU_KEY)
         raise GPUBusyError("All GPU slots are occupied. Please try again shortly.")
-    _in_use += 1
     try:
         yield
     finally:
-        _in_use -= 1
+        await redis_client.decr(_GPU_KEY)
 
 
 async def acquire_gpu_slot() -> None:
     """
     Eagerly acquires a GPU slot for a streaming response.
-
     Must be paired with release_gpu_slot() in a generator finally-block.
     Raises GPUBusyError if all slots are occupied.
     """
-    global _in_use
-    if _in_use >= _SLOTS:
+    count = await redis_client.incr(_GPU_KEY)
+    if count > _SLOTS:
+        await redis_client.decr(_GPU_KEY)
         raise GPUBusyError("All GPU slots are occupied. Please try again shortly.")
-    _in_use += 1
 
 
 async def release_gpu_slot() -> None:
     """Releases a slot previously acquired with acquire_gpu_slot()."""
-    global _in_use
-    _in_use -= 1
+    await redis_client.decr(_GPU_KEY)
+
+
+async def get_gpu_status() -> dict:
+    """Returns current GPU slot usage from Redis."""
+    count = await redis_client.get(_GPU_KEY)
+    in_use = int(count or 0)
+    return {"slots_total": _SLOTS, "slots_in_use": in_use, "slots_available": max(0, _SLOTS - in_use)}
+
+
+async def reset_gpu_counter() -> dict:
+    """Resets the GPU slot counter to zero. Use only when a crash left the counter stale."""
+    await redis_client.set(_GPU_KEY, 0)
+    return {"status": "success", "message": "GPU slot counter reset to 0.", "slots_total": _SLOTS}

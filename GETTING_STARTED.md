@@ -1,0 +1,169 @@
+# Getting Started
+
+## Prerequisites
+
+- Python 3.14+
+- [uv](https://github.com/astral-sh/uv) — package manager
+- A running Redis instance (local, [Upstash](https://upstash.com/), or dedicated server)
+- An OpenAI-compatible LLM server ([Ollama](https://ollama.com/), LiteLLM, LM Studio, vLLM, etc.)
+
+---
+
+## Installation
+
+```bash
+git clone https://github.com/mettjs/PraixisEngine.git
+cd PraixisEngine
+uv sync
+```
+
+---
+
+## Configuration
+
+Copy `.env.example` to `.env` and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+```env
+# LLM Backend — any OpenAI-compatible server
+AI_API_URL=http://localhost:8081
+AI_API_KEY=your-local-key
+MODEL_NAME=gemma3:12b
+
+# GPU Concurrency — max simultaneous LLM calls (returns 503 when exceeded)
+GPU_CONCURRENCY=2
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# Session
+SESSION_TTL=86400       # seconds — default 24 hours
+MAX_HISTORY_PAIRS=20    # user+assistant turns kept before oldest are trimmed
+
+# ChromaDB — optional, defaults to ./chroma_data
+# CHROMA_PATH=./chroma_data
+
+# Admin panel credentials
+ADMIN_USERNAME=your_admin_username
+ADMIN_PASSWORD=your_admin_password
+```
+
+**Redis URL formats:**
+- Local: `redis://localhost:6379/0`
+- With password: `redis://:password@host:6379/0`
+- TLS (Upstash, remote): `rediss://:password@host:6380/0`
+
+---
+
+## Running Locally
+
+```bash
+uv run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+```
+
+API docs are available at `http://localhost:8080/docs`.
+
+---
+
+## Running with Docker
+
+Make sure Docker is running. The project includes a `Makefile` with two modes.
+
+### Local stack — app + Redis in Docker
+
+Use this when you want everything self-contained on one machine. Docker boots both the app and a Redis container, wires them together, and persists data in named volumes.
+
+```bash
+make up-local
+```
+
+You do not need `REDIS_URL` in `.env` for this mode — Docker overrides it automatically to point at the Redis container.
+
+### Distributed / production — app only
+
+Use this when Redis (and/or the LLM) lives on a separate server. Docker boots only the app and reads `REDIS_URL` directly from your `.env`.
+
+```bash
+make up
+```
+
+Make sure your `.env` has the correct remote URLs before running:
+
+```env
+AI_API_URL=http://<llm-server-ip>:8081
+REDIS_URL=redis://:password@<redis-server-ip>:6379/0
+```
+
+### Tear down
+
+```bash
+make down        # matches make up
+make down-local  # matches make up-local
+```
+
+### Manual commands (without make)
+
+```bash
+# Local stack
+docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+
+# App only
+docker compose up --build
+```
+
+---
+
+## Provision Your First API Key
+
+Once the app is running, create an API key for your client application:
+
+```bash
+curl -X POST "http://localhost:8080/api/system/keys/generate?app_name=my-app" \
+  -u your_admin_username:your_admin_password
+```
+
+> `app_name` must match `^[a-zA-Z0-9_-]{3,63}$`.
+
+Response:
+
+```json
+{
+  "app_name": "my-app",
+  "api_key": "praxis_...",
+  "message": "Store this key safely. It will not be shown again."
+}
+```
+
+**The key is only returned once.** It is stored as a SHA-256 hash in Redis — there is no way to retrieve the plaintext again. Save it immediately.
+
+---
+
+## Your First Request
+
+Include the key in the `X-API-Key` header on every request:
+
+```bash
+curl -X POST "http://localhost:8080/general-requests/chat" \
+  -H "X-API-Key: praxis_..." \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Hello!", "session_id": null}'
+```
+
+The response streams token-by-token. The first line is always:
+
+```
+[SESSION_ID:a1b2c3d4e5f6...]
+```
+
+Save this ID and pass it as `session_id` in follow-up messages to continue the conversation.
+
+---
+
+## Next Steps
+
+- Upload documents and ask questions: see **RAG** endpoints in [README.md](README.md#rag-upload----post-rag-dbupload)
+- Check system health: `GET /api/system/health` (admin credentials required)
+- Review all endpoints: [README.md → API Reference](README.md#api-reference)

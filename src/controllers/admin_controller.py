@@ -1,9 +1,19 @@
 import asyncio
 import secrets
 from fastapi import HTTPException
-from src.utils.memory import redis_client, delete_all_app_sessions, get_usage, get_all_app_names
+from src.utils.memory import (
+    redis_client,
+    delete_all_app_sessions,
+    get_usage,
+    get_all_app_names,
+    store_api_key,
+    remove_api_key,
+    list_all_api_keys,
+)
 from src.utils.vector_db import chroma_client
 from src.utils.ai_client import get_ai_client
+from src.utils.concurrency import get_gpu_status, reset_gpu_counter
+from src.utils.audit import log_event, get_audit_log
 from src.utils.logger import logger
 
 # Sync client used only for the health-check ping (no LLM calls, no token tracking)
@@ -55,36 +65,30 @@ async def get_system_stats() -> dict:
 async def generate_api_key(app_name: str) -> dict:
     raw_key = secrets.token_urlsafe(32)
     full_key = f"praxis_{raw_key}"
-    await redis_client.set(f"apikey:{full_key}", app_name)
+    await store_api_key(full_key, app_name)
+    await log_event("KEY_GENERATED", {"app_name": app_name})
     logger.info(f"Generated new API Key for app: {app_name}")
     return {"app_name": app_name, "api_key": full_key, "message": "Store this key safely. It will not be shown again."}
 
 
 async def revoke_api_key(api_key: str) -> dict:
-    app_name = await redis_client.get(f"apikey:{api_key}")
-    deleted = await redis_client.delete(f"apikey:{api_key}")
-
+    deleted = await remove_api_key(api_key)
     if not deleted:
         raise HTTPException(status_code=404, detail="API Key not found.")
-
-    logger.info(f"Revoked API Key for app: {app_name}")
+    await log_event("KEY_REVOKED", {"key_preview": api_key[:14] + "..."})
+    logger.info("Revoked an API Key.")
     return {"status": "success", "message": "API Key permanently revoked."}
 
 
 async def list_api_keys() -> dict:
-    """Lists all provisioned API keys with masked values."""
-    entries = []
-    async for redis_key in redis_client.scan_iter("apikey:*"):
-        app_name = await redis_client.get(redis_key)
-        full_key = str(redis_key).removeprefix("apikey:")
-        masked = full_key[:14] + "..." if len(full_key) > 14 else full_key
-        entries.append({"app_name": str(app_name), "api_key_preview": masked})
+    entries = await list_all_api_keys()
     return {"total_keys": len(entries), "keys": entries}
 
 
 async def delete_app_sessions(app_name: str) -> dict:
     """Force-expires all Redis sessions belonging to a specific app."""
     count = await delete_all_app_sessions(app_name)
+    await log_event("SESSION_WIPED", {"sessions_deleted": count}, app_name=app_name)
     logger.info(f"Wiped {count} session(s) for app: {app_name}")
     return {"status": "success", "sessions_deleted": count, "app_name": app_name}
 
@@ -96,3 +100,23 @@ async def get_app_usage(app_name: str) -> dict:
 async def get_all_usage() -> dict:
     app_names = await get_all_app_names()
     return {"apps": [await get_usage(name) for name in app_names]}
+
+
+async def get_gpu() -> dict:
+    return await get_gpu_status()
+
+
+async def reset_gpu() -> dict:
+    result = await reset_gpu_counter()
+    await log_event("GPU_RESET", {"reason": "manual admin reset"})
+    return result
+
+
+async def get_global_audit(limit: int = 100, offset: int = 0) -> dict:
+    events = await get_audit_log(app_name=None, limit=limit, offset=offset)
+    return {"total_returned": len(events), "events": events}
+
+
+async def get_app_audit(app_name: str, limit: int = 100, offset: int = 0) -> dict:
+    events = await get_audit_log(app_name=app_name, limit=limit, offset=offset)
+    return {"app_name": app_name, "total_returned": len(events), "events": events}
