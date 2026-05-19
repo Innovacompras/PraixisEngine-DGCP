@@ -4,7 +4,7 @@ from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from src.models.schemas import EmbedRequest, QuestionRequest
 from src.services.rag_service import generate_comparison, generate_rag_answer, generate_summary, reformulate_query
-from src.utils.file_parser import extract_text_from_file
+from src.utils.file_parser import extract_text_from_file, MAX_FILE_SIZE
 from src.utils.vector_db import (
     delete_file_from_collection,
     get_embedding,
@@ -17,10 +17,8 @@ from src.utils.vector_db import (
 )
 from src.utils.memory import get_session_history
 from src.utils.logger import logger
-from src.utils.concurrency import GPUBusyError, acquire_gpu_slot
+from src.utils.concurrency import GPUBusyError, acquire_gpu_slot, release_gpu_slot
 from src.utils.audit import log_event
-
-_MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
 
 async def handle_list_collections(app_name: str) -> dict:
@@ -84,8 +82,8 @@ async def handle_rag_upload(
             results.append({"filename": None, "status": "error", "detail": "File has no filename."})
             continue
         try:
-            content = await file.read(_MAX_FILE_SIZE + 1)
-            if len(content) > _MAX_FILE_SIZE:
+            content = await file.read(MAX_FILE_SIZE + 1)
+            if len(content) > MAX_FILE_SIZE:
                 results.append({"filename": file.filename, "status": "error", "detail": "File exceeds 20 MB limit."})
                 continue
             document_text = extract_text_from_file(file.filename, content)
@@ -134,18 +132,25 @@ async def handle_rag_question(request: QuestionRequest, app_name: str) -> Stream
     except GPUBusyError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-    logger.info(f"Streaming RAG answer for app: {app_name}, collection: {request.collection_name}")
-    return StreamingResponse(
-        generate_rag_answer(
-            question=request.question,
-            app_name=app_name,
-            context_chunks=relevant_chunks,
-            search_query=search_query,
-            session_id=request.session_id,
-            system_prompt=request.system_prompt,
-        ),
-        media_type="text/event-stream",
-    )
+    # The slot is released in generate_rag_answer's finally. If anything fails
+    # between acquiring it and handing the generator to Starlette, release here
+    # so the permit can't leak.
+    try:
+        logger.info(f"Streaming RAG answer for app: {app_name}, collection: {request.collection_name}")
+        return StreamingResponse(
+            generate_rag_answer(
+                question=request.question,
+                app_name=app_name,
+                context_chunks=relevant_chunks,
+                search_query=search_query,
+                session_id=request.session_id,
+                system_prompt=request.system_prompt,
+            ),
+            media_type="text/event-stream",
+        )
+    except Exception:
+        await release_gpu_slot()
+        raise
 
 
 async def handle_summarize_document(collection_name: str, filename: str, app_name: str) -> dict:

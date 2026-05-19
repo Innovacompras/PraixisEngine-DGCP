@@ -3,6 +3,8 @@ from pypdf import PdfReader
 import docx
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+
 def extract_text_from_file(filename: str, file_content: bytes) -> str:
     """Reads raw file bytes and extracts text based on the file extension."""
     text = ""

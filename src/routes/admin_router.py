@@ -10,7 +10,6 @@ from src.controllers.admin_controller import (
     get_llm_health,
     get_system_stats,
     list_api_keys,
-    revoke_api_key,
     revoke_api_key_by_hash,
     delete_app_sessions,
     get_gpu,
@@ -69,11 +68,6 @@ async def list_keys():
 @router.post("/keys/generate")
 async def create_app_key(app_name: str = Query(..., pattern=r"^[a-zA-Z0-9_-]{3,63}$")):
     return await generate_api_key(app_name)
-
-
-@router.delete("/keys/revoke")
-async def delete_app_key(api_key: str):
-    return await revoke_api_key(api_key)
 
 
 @router.delete("/keys/revoke-by-hash")

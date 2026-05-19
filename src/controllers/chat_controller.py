@@ -1,13 +1,11 @@
 from src.models.schemas import ChatRequest
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from src.utils.file_parser import extract_text_from_file
+from src.utils.file_parser import extract_text_from_file, MAX_FILE_SIZE
 from src.services.chat_service import generate_chat_stream, generate_file_summary
 from src.utils.memory import delete_session, get_all_active_sessions, get_session_history
 from src.utils.logger import logger
-from src.utils.concurrency import GPUBusyError, acquire_gpu_slot
-
-_MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+from src.utils.concurrency import GPUBusyError, acquire_gpu_slot, release_gpu_slot
 
 
 async def handle_chat(request: ChatRequest, app_name: str) -> StreamingResponse:
@@ -16,17 +14,24 @@ async def handle_chat(request: ChatRequest, app_name: str) -> StreamingResponse:
     except GPUBusyError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-    logger.info(f"Received chat request for app: {app_name}, session: {request.session_id}")
-    return StreamingResponse(
-        generate_chat_stream(
-            app_name=app_name,
-            prompt=request.prompt,
-            system_prompt=request.system_prompt,
-            session_id=request.session_id,
-            response_format=request.response_format,
-        ),
-        media_type="text/event-stream",
-    )
+    # The slot is released in generate_chat_stream's finally. If anything fails
+    # between acquiring it and handing the generator to Starlette, release here
+    # so the permit can't leak.
+    try:
+        logger.info(f"Received chat request for app: {app_name}, session: {request.session_id}")
+        return StreamingResponse(
+            generate_chat_stream(
+                app_name=app_name,
+                prompt=request.prompt,
+                system_prompt=request.system_prompt,
+                session_id=request.session_id,
+                response_format=request.response_format,
+            ),
+            media_type="text/event-stream",
+        )
+    except Exception:
+        await release_gpu_slot()
+        raise
 
 
 async def handle_file_summary(file: UploadFile, task: str, tone: str, app_name: str) -> StreamingResponse:
@@ -34,8 +39,8 @@ async def handle_file_summary(file: UploadFile, task: str, tone: str, app_name: 
         logger.warning("Received file summary request without a file.")
         raise HTTPException(status_code=400, detail="No file uploaded.")
 
-    content = await file.read(_MAX_FILE_SIZE + 1)
-    if len(content) > _MAX_FILE_SIZE:
+    content = await file.read(MAX_FILE_SIZE + 1)
+    if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="File too large. Maximum allowed size is 20 MB.")
 
     try:
@@ -46,22 +51,24 @@ async def handle_file_summary(file: UploadFile, task: str, tone: str, app_name: 
     if not document_text.strip():
         raise HTTPException(status_code=400, detail="Could not extract any text from the provided file.")
 
-    try:
-        await acquire_gpu_slot()
-    except GPUBusyError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-
     filename = file.filename
 
+    # generate_file_summary manages its own GPU slots per LLM call via the shared
+    # runner, so we must NOT pre-acquire a slot here (doing so would deadlock
+    # under concurrency). If every slot stays busy past the timeout, surface it
+    # as an in-stream error since the response has already started.
     async def _with_file_header():
         yield f"[FILE:{filename}]\n"
-        async for token in generate_file_summary(
-            document_text=document_text,
-            task=task,
-            tone=tone,
-            app_name=app_name,
-        ):
-            yield token
+        try:
+            async for token in generate_file_summary(
+                document_text=document_text,
+                task=task,
+                tone=tone,
+                app_name=app_name,
+            ):
+                yield token
+        except GPUBusyError as e:
+            yield f"[ERROR:{e}]\n"
 
     logger.info(f"Streaming file summary for app: {app_name}, file: {filename}")
     return StreamingResponse(_with_file_header(), media_type="text/event-stream")

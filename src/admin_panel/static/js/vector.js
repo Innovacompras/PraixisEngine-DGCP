@@ -105,8 +105,9 @@ function _adminVector() {
           if (this.vectorFiles[key]) {
             this.vectorFiles[key] = this.vectorFiles[key].filter(f => f !== filename);
           }
-          const col = this.vectorCollections.find(c => c.app_name === app_name && c.collection_name === collection_name);
-          if (col) col.chunk_count = Math.max(0, (col.chunk_count || 1) - 1);
+          // A file owns an unknown number of chunks, so re-fetch collections
+          // for an accurate chunk count instead of guessing.
+          await this.loadVectorCollections();
           this.showToast(`"${filename}" deleted.`, 'success');
         } else {
           const d = await r.json().catch(() => ({}));

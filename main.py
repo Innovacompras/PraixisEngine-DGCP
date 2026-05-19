@@ -24,6 +24,7 @@ app = FastAPI(
     title="Praixis - Business logic based API",
     description="Custom decoupled business logic API powered by Gemma 4",
     version="1.0.0",
+    docs_url=None,
     redoc_url="/docs",
     lifespan=lifespan,
 )

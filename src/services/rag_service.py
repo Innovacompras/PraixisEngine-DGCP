@@ -3,27 +3,12 @@ import os
 from typing import AsyncGenerator
 from src.utils.ai_client import get_async_ai_client, record_llm_usage
 from src.utils.file_parser import chunk_text
-from src.utils.memory import add_message, get_or_create_session
-from src.utils.concurrency import gpu_slot, release_gpu_slot
+from src.utils.memory import get_or_create_session, persist_history
+from src.utils.concurrency import release_gpu_slot
+from src.services.llm_runner import call_llm, map_calls
 
 _client = get_async_ai_client()
 _MODEL_NAME = os.getenv("MODEL_NAME", "gemma-api-test")
-_CHUNK_CONCURRENCY = int(os.getenv("CHUNK_CONCURRENCY", "4"))
-_chunk_sem = asyncio.Semaphore(_CHUNK_CONCURRENCY)
-
-
-async def _call_llm(prompt: str, app_name: str) -> str:
-    """Single non-streaming LLM call. Raises on empty response."""
-    async with gpu_slot():
-        response = await _client.chat.completions.create(
-            model=_MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
-        )
-    await record_llm_usage(response, app_name)
-    content = response.choices[0].message.content  # type: ignore[union-attr]
-    if content is None:
-        raise RuntimeError("LLM returned no content.")
-    return content
 
 
 async def generate_rag_answer(
@@ -34,7 +19,11 @@ async def generate_rag_answer(
     system_prompt: str | None = None,
     session_id: str | None = None,
 ) -> AsyncGenerator[str, None]:
-    """Generates an answer to a question based only on the context provided by the collection."""
+    """Generates an answer to a question based only on the context provided by the collection.
+
+    The GPU slot is acquired by the controller before streaming starts and is
+    released in the finally block here.
+    """
     if not system_prompt:
         system_prompt = (
             "You are an expert institutional analyst. "
@@ -42,36 +31,38 @@ async def generate_rag_answer(
             "If the answer is not contained in the context, explain that the answer cannot be found in the document, do not fabricate any information."
         )
 
-    active_session_id, history = await get_or_create_session(
-        session_id=session_id,
-        system_prompt=system_prompt,
-        app_name=app_name,
-    )
-
-    await add_message(session_id=active_session_id, role="user", content=question, app_name=app_name)
-
-    formatted_chunks = [f"[Source: {chunk['source']}]\n{chunk['text']}" for chunk in context_chunks]
-    context_text = "\n\n---\n\n".join(formatted_chunks)
-    augmented_question = f"Context:\n{context_text}\n\nQuestion: {question}"
-
-    temp_history = history.copy()
-    temp_history.append({"role": "user", "content": augmented_question})
-
-    yield f"[SESSION_ID:{active_session_id}]\n"
-    yield f"[SEARCH_QUERY:{search_query}]\n"
-    unique_sources = list({chunk["source"] for chunk in context_chunks})
-    yield f"[SOURCES:{','.join(unique_sources)}]\n"
-
-    response = await _client.chat.completions.create(  # type: ignore[call-overload, arg-type]
-        model=_MODEL_NAME,
-        messages=temp_history,
-        stream=True,
-        stream_options={"include_usage": True},
-    )
-
     full_answer = ""
-    usage_recorded = False
+    active_session_id: str | None = None
+    history: list | None = None
     try:
+        active_session_id, history = await get_or_create_session(
+            session_id=session_id,
+            system_prompt=system_prompt,
+            app_name=app_name,
+        )
+
+        history.append({"role": "user", "content": question})
+        await persist_history(app_name=app_name, session_id=active_session_id, history=history)
+
+        formatted_chunks = [f"[Source: {chunk['source']}]\n{chunk['text']}" for chunk in context_chunks]
+        context_text = "\n\n---\n\n".join(formatted_chunks)
+        augmented_question = f"Context:\n{context_text}\n\nQuestion: {question}"
+
+        temp_history = history[:-1] + [{"role": "user", "content": augmented_question}]
+
+        yield f"[SESSION_ID:{active_session_id}]\n"
+        yield f"[SEARCH_QUERY:{search_query}]\n"
+        unique_sources = list({chunk["source"] for chunk in context_chunks})
+        yield f"[SOURCES:{','.join(unique_sources)}]\n"
+
+        response = await _client.chat.completions.create(  # type: ignore[call-overload, arg-type]
+            model=_MODEL_NAME,
+            messages=temp_history,
+            stream=True,
+            stream_options={"include_usage": True},
+        )
+
+        usage_recorded = False
         async for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content is not None:
                 token = chunk.choices[0].delta.content
@@ -81,8 +72,9 @@ async def generate_rag_answer(
                 await record_llm_usage(chunk, app_name)
                 usage_recorded = True
     finally:
-        if full_answer:
-            await add_message(session_id=active_session_id, role="assistant", content=full_answer, app_name=app_name)
+        if full_answer and active_session_id and history is not None:
+            history.append({"role": "assistant", "content": full_answer})
+            await persist_history(app_name=app_name, session_id=active_session_id, history=history)
         await release_gpu_slot()
 
 
@@ -100,17 +92,13 @@ async def reformulate_query(history: list, latest_question: str, app_name: str) 
     history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history[1:]])
     user_msg = f"History:\n{history_text}\n\nLatest Question: {latest_question}"
 
-    async with gpu_slot():
-        response = await _client.chat.completions.create(
-            model=_MODEL_NAME,
-            messages=[
-                {"role": "system", "content": reformulation_prompt},
-                {"role": "user", "content": user_msg},
-            ],
-        )
-    await record_llm_usage(response, app_name)
-
-    content = response.choices[0].message.content  # type: ignore[union-attr]
+    content = await call_llm(
+        [
+            {"role": "system", "content": reformulation_prompt},
+            {"role": "user", "content": user_msg},
+        ],
+        app_name,
+    )
     return content.strip() if content else latest_question
 
 
@@ -126,15 +114,18 @@ async def _map_reduce(
 
     if len(chunks) == 1:
         if single_chunk_prompt:
-            return await _call_llm(f"{single_chunk_prompt}\n\n{chunks[0]}", app_name)
+            return await call_llm(
+                [{"role": "user", "content": f"{single_chunk_prompt}\n\n{chunks[0]}"}], app_name
+            )
         return chunks[0]
 
-    async def _run(chunk: str) -> str:
-        async with _chunk_sem:
-            return await _call_llm(f"{map_prompt}\n\n{chunk}", app_name)
-
-    extracted = list(await asyncio.gather(*[_run(chunk) for chunk in chunks]))
-    return await _call_llm(f"{reduce_prompt}\n\n" + "\n\n".join(extracted), app_name)
+    extracted = await map_calls(
+        [[{"role": "user", "content": f"{map_prompt}\n\n{chunk}"}] for chunk in chunks],
+        app_name,
+    )
+    return await call_llm(
+        [{"role": "user", "content": f"{reduce_prompt}\n\n" + "\n\n".join(extracted)}], app_name
+    )
 
 
 async def generate_summary(document_text: str, app_name: str) -> str:
@@ -165,10 +156,17 @@ async def generate_comparison(doc1_text: str, doc2_text: str, file_1: str, file_
         ),
     )
 
-    return await _call_llm(
-        f"Compare these two documents. Provide a bulleted list of strictly what has changed "
-        f"or what is distinctly different between them.\n\n"
-        f"--- Document 1 ({file_1}) ---\n{digest_1}\n\n"
-        f"--- Document 2 ({file_2}) ---\n{digest_2}",
+    return await call_llm(
+        [
+            {
+                "role": "user",
+                "content": (
+                    f"Compare these two documents. Provide a bulleted list of strictly what has changed "
+                    f"or what is distinctly different between them.\n\n"
+                    f"--- Document 1 ({file_1}) ---\n{digest_1}\n\n"
+                    f"--- Document 2 ({file_2}) ---\n{digest_2}"
+                ),
+            }
+        ],
         app_name,
     )

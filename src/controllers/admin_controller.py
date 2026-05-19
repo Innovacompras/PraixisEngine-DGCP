@@ -7,7 +7,6 @@ from src.utils.memory import (
     get_usage,
     get_all_app_names,
     store_api_key,
-    remove_api_key,
     remove_api_key_by_hash,
     list_all_api_keys,
 )
@@ -91,15 +90,6 @@ async def generate_api_key(app_name: str) -> dict:
     await log_event("KEY_GENERATED", {"app_name": app_name})
     logger.info(f"Generated new API Key for app: {app_name}")
     return {"app_name": app_name, "api_key": full_key, "message": "Store this key safely. It will not be shown again."}
-
-
-async def revoke_api_key(api_key: str) -> dict:
-    deleted = await remove_api_key(api_key)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="API Key not found.")
-    await log_event("KEY_REVOKED", {"key_preview": api_key[:14] + "..."})
-    logger.info("Revoked an API Key.")
-    return {"status": "success", "message": "API Key permanently revoked."}
 
 
 async def list_api_keys() -> dict:

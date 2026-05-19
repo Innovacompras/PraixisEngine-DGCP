@@ -9,7 +9,7 @@ function _adminDashboard() {
       this.dashboardLoaded   = true;
     },
 
-    loadHealth() {
+    async loadHealth() {
       this.health.redis    = null;
       this.health.chromadb = null;
       this.health.llm      = null;
@@ -19,9 +19,7 @@ function _adminDashboard() {
           this.health[svc] = r.ok ? (await r.json()).status : 'offline';
         } catch { this.health[svc] = 'offline'; }
       };
-      load('redis');
-      load('chromadb');
-      load('llm');
+      await Promise.all([load('redis'), load('chromadb'), load('llm')]);
     },
 
     async loadStats() {

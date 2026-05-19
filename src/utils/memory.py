@@ -69,15 +69,15 @@ async def get_or_create_session(
     return new_session_id, initial_history
 
 
-async def add_message(app_name: str, session_id: str, role: str, content: str):
-    redis_key = _get_redis_key(app_name, session_id)
-    stored_data = await redis_client.get(redis_key)
+async def persist_history(app_name: str, session_id: str, history: list) -> None:
+    """Trims and writes an in-memory history back to Redis in a single round-trip.
 
-    if isinstance(stored_data, str):
-        history = json.loads(stored_data)
-        history.append({"role": role, "content": content})
-        history = _trim_history(history)
-        await redis_client.setex(redis_key, _SESSION_TTL, json.dumps(history))
+    Use this when the caller already holds the history (e.g. from
+    get_or_create_session) to avoid a redundant read-modify-write round-trip.
+    """
+    redis_key = _get_redis_key(app_name, session_id)
+    trimmed = _trim_history(history)
+    await redis_client.setex(redis_key, _SESSION_TTL, json.dumps(trimmed))
 
 
 async def get_session_history(app_name: str, session_id: str) -> list:
@@ -156,10 +156,6 @@ async def lookup_api_key(full_key: str) -> str | None:
         return json.loads(data).get("app_name")
     except json.JSONDecodeError:
         return None
-
-
-async def remove_api_key(full_key: str) -> bool:
-    return await redis_client.delete(f"apikey:{_hash_api_key(full_key)}") > 0  # type: ignore[operator]
 
 
 async def list_all_api_keys() -> list[dict]:

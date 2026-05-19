@@ -137,10 +137,8 @@
             <th class="th text-right">Actions</th>
           </tr>
         </thead>
-        <tbody>
           <template x-for="col in vectorCollections" :key="vectorKey(col)">
-            <template x-if="true">
-              <tbody>
+            <tbody>
 
                 <!-- Collection row -->
                 <tr class="border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors">
@@ -217,10 +215,8 @@
                   </td>
                 </tr>
 
-              </tbody>
-            </template>
+            </tbody>
           </template>
-        </tbody>
       </table>
     </div>
   </div>

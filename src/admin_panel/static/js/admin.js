@@ -203,6 +203,7 @@ function adminApp() {
     },
 
     startAutoRefresh() {
+      this.stopAutoRefresh();  // never stack a second pair of timers
       this._gpuTimer    = setInterval(() => { if (this.view === 'dashboard') this.loadGpu(); },    10000);
       this._healthTimer = setInterval(() => { if (this.view === 'dashboard') this.loadHealth(); }, 30000);
     },

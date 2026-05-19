@@ -107,7 +107,10 @@ async def add_file_to_rag_db(
 
         chunks = text_splitter.split_text(text)
         new_ids = [f"{filename}_{uuid.uuid4().hex[:6]}" for _ in chunks]
-        metadatas: List[Dict[str, Any]] = [{"source": filename, "app": app_name} for _ in chunks]
+        metadatas: List[Dict[str, Any]] = [
+            {"source": filename, "app": app_name, "chunk_index": i}
+            for i in range(len(chunks))
+        ]
 
         # Add new chunks first — if this fails, old data is still intact
         collection.add(documents=chunks, metadatas=metadatas, ids=new_ids)  # type: ignore[arg-type]
@@ -208,11 +211,25 @@ async def get_full_document_text(collection_name: str, app_name: str, filename: 
         if not collection.metadata or collection.metadata.get("app") != app_name:
             raise ValueError("Access denied: You do not own this collection.")
 
-        results = collection.get(where={"source": filename})
-        if not results or not results["documents"]:
+        results = collection.get(where={"source": filename}, include=["documents", "metadatas"])
+        documents = results.get("documents") if results else None
+        if not documents:
             raise ValueError(f"No chunks found for document '{filename}' in this collection.")
 
-        return "\n\n".join(results["documents"])  # type: ignore[arg-type]
+        metas = results.get("metadatas")
+        if not metas or len(metas) != len(documents):
+            # Metadata unavailable or misaligned — fall back to Chroma's order
+            # rather than risk dropping chunks via a truncated zip.
+            return "\n\n".join(documents)
+
+        # Chroma does not guarantee retrieval order; sort by the stored chunk_index
+        # so the reconstructed document preserves its original sequence. Chunks
+        # written before chunk_index existed sort last in stable insertion order.
+        ordered = sorted(
+            zip(documents, metas),
+            key=lambda pair: pair[1].get("chunk_index", float("inf")) if pair[1] else float("inf"),
+        )
+        return "\n\n".join(doc for doc, _ in ordered)
 
     return await asyncio.to_thread(_run)
 
