@@ -1,0 +1,57 @@
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: Confirm Revoke API Key
+     ═══════════════════════════════════════════════════════ -->
+<div x-show="modal === 'revokeKey'"
+     x-transition:enter="transition ease-out duration-150"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     @keydown.escape.window="modal = null"
+     class="modal-overlay">
+
+  <div class="modal-box"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0 scale-95"
+       x-transition:enter-end="opacity-100 scale-100"
+       @click.stop>
+
+    <!-- Header -->
+    <div class="px-6 pt-6 pb-4 border-b border-slate-700">
+      <h3 class="font-semibold text-slate-100">Revoke API Key</h3>
+    </div>
+
+    <!-- Body -->
+    <div class="px-6 py-5 space-y-4">
+      <p class="text-sm text-slate-300">
+        Are you sure you want to permanently revoke the API key for
+        <strong class="text-slate-100" x-text="modalData.app_name"></strong>?
+      </p>
+
+      <!-- Key details -->
+      <div class="bg-slate-900/60 border border-slate-700 rounded-lg p-3 space-y-1">
+        <div class="flex gap-2 text-xs">
+          <span class="text-slate-500 w-20">App</span>
+          <span class="text-slate-300 font-medium" x-text="modalData.app_name"></span>
+        </div>
+        <div class="flex gap-2 text-xs">
+          <span class="text-slate-500 w-20">Key</span>
+          <code class="text-slate-300 font-mono" x-text="modalData.key_preview"></code>
+        </div>
+      </div>
+
+      <p class="text-xs text-red-400">
+        This action cannot be undone. Any application using this key will lose access immediately.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-6 pb-6 flex justify-end gap-3">
+      <button @click="modal = null" class="btn-ghost">Cancel</button>
+      <button @click="revokeKey()" class="btn-danger" :disabled="modalLoading">
+        <span x-show="modalLoading" class="spinner"></span>
+        <svg x-show="!modalLoading" class="w-4 h-4"><use href="#ic-trash"/></svg>
+        Revoke Key
+      </button>
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,58 @@
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: Confirm Delete File
+     ═══════════════════════════════════════════════════════ -->
+<div x-show="modal === 'deleteFile'"
+     x-transition:enter="transition ease-out duration-150"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     @keydown.escape.window="modal = null"
+     class="modal-overlay">
+
+  <div class="modal-box"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0 scale-95"
+       x-transition:enter-end="opacity-100 scale-100"
+       @click.stop>
+
+    <div class="px-6 pt-6 pb-4 border-b border-slate-700">
+      <h3 class="font-semibold text-slate-100">Delete File</h3>
+    </div>
+
+    <div class="px-6 py-5 space-y-4">
+      <p class="text-sm text-slate-300">
+        Permanently remove
+        <strong class="text-slate-100" x-text="modalData.filename"></strong>
+        and all its chunks from the collection?
+      </p>
+
+      <div class="bg-slate-900/60 border border-slate-700 rounded-lg p-3 space-y-1">
+        <div class="flex gap-2 text-xs">
+          <span class="text-slate-500 w-24">App</span>
+          <span class="text-slate-300 font-medium" x-text="modalData.app_name"></span>
+        </div>
+        <div class="flex gap-2 text-xs">
+          <span class="text-slate-500 w-24">Collection</span>
+          <span class="text-slate-300" x-text="modalData.collection_name"></span>
+        </div>
+        <div class="flex gap-2 text-xs">
+          <span class="text-slate-500 w-24">File</span>
+          <code class="text-slate-300 font-mono break-all" x-text="modalData.filename"></code>
+        </div>
+      </div>
+
+      <p class="text-xs text-red-400">
+        All embedded chunks for this file will be permanently removed. This action cannot be undone.
+      </p>
+    </div>
+
+    <div class="px-6 pb-6 flex justify-end gap-3">
+      <button @click="modal = null" class="btn-ghost">Cancel</button>
+      <button @click="deleteFile()" class="btn-danger" :disabled="modalLoading">
+        <span x-show="modalLoading" class="spinner"></span>
+        <svg x-show="!modalLoading" class="w-4 h-4"><use href="#ic-trash"/></svg>
+        Delete File
+      </button>
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,144 @@
+<!-- ═══════════════════════════════════════════════════════
+     DASHBOARD — system diagnostics, runtime metrics, compute allocation
+     ═══════════════════════════════════════════════════════ -->
+<div x-show="view === 'dashboard'">
+
+  <!-- Loading skeleton -->
+  <div x-show="loading.dashboard && !dashboardLoaded" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <template x-for="i in 3">
+      <div class="card animate-pulse h-40">
+        <div class="h-2 bg-cyan-500/5 rounded w-32 mb-6"></div>
+        <div class="space-y-2.5">
+          <div class="h-8 bg-cyan-500/5 rounded"></div>
+          <div class="h-8 bg-cyan-500/5 rounded"></div>
+          <div class="h-8 bg-cyan-500/5 rounded"></div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <div x-show="!loading.dashboard || dashboardLoaded" class="space-y-4">
+
+    <!-- Row 1: Diagnostics + Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <!-- System Diagnostics -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-[9px] font-mono tracking-[0.22em] text-cyan-700">// SYSTEM DIAGNOSTICS</span>
+          <span class="text-[9px] font-mono text-cyan-900">POLL:30s</span>
+        </div>
+        <div class="space-y-1.5">
+          <template x-for="svc in ['api', 'redis', 'chromadb', 'llm']">
+            <div class="flex items-center justify-between px-3 py-2.5 bg-black/30 border border-cyan-500/5">
+              <div class="flex items-center gap-2.5">
+                <span class="w-1.5 h-1.5 rounded-full shrink-0 transition-all duration-300"
+                      :class="statusDotColor(health[svc])"></span>
+                <span class="text-xs font-mono text-slate-500"
+                      x-text="{ api: 'API.GATEWAY', redis: 'REDIS.CACHE', chromadb: 'VECTOR.STORE', llm: 'LLM.BACKEND' }[svc]">
+                </span>
+              </div>
+              <span class="text-[10px] font-mono font-bold uppercase tracking-wider"
+                    :class="health[svc] ? statusColor(health[svc]) : 'text-cyan-800 animate-pulse'"
+                    x-text="health[svc] || 'CHECKING'">
+              </span>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Runtime Metrics -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-[9px] font-mono tracking-[0.22em] text-cyan-700">// RUNTIME METRICS</span>
+        </div>
+        <div class="space-y-1.5">
+
+          <div class="flex items-center justify-between px-3 py-2.5 bg-black/30 border border-cyan-500/5">
+            <div class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-cyan-800 shrink-0"><use href="#ic-sessions"/></svg>
+              <span class="text-xs font-mono text-slate-500">ACTIVE.SESSIONS</span>
+            </div>
+            <span class="text-sm font-bold font-mono text-cyan-300"
+                  x-text="stats.active_chat_sessions ?? '—'"></span>
+          </div>
+
+          <div class="flex items-center justify-between px-3 py-2.5 bg-black/30 border border-cyan-500/5">
+            <div class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-cyan-800 shrink-0"><use href="#ic-db"/></svg>
+              <span class="text-xs font-mono text-slate-500">VECTOR.COLLECTIONS</span>
+            </div>
+            <span class="text-sm font-bold font-mono text-cyan-300"
+                  x-text="stats.total_vector_collections ?? '—'"></span>
+          </div>
+
+          <div class="flex items-center justify-between px-3 py-2.5 bg-black/30 border border-cyan-500/5">
+            <div class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-cyan-800 shrink-0"><use href="#ic-chart"/></svg>
+              <span class="text-xs font-mono text-slate-500">VECTOR.CHUNKS</span>
+            </div>
+            <span class="text-sm font-bold font-mono text-cyan-300"
+                  x-text="stats.total_vector_chunks != null ? stats.total_vector_chunks.toLocaleString() : '—'">
+            </span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Compute Allocation (GPU) -->
+    <div class="card">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 text-cyan-700"><use href="#ic-cpu"/></svg>
+          <span class="text-[9px] font-mono tracking-[0.22em] text-cyan-700">// COMPUTE ALLOCATION</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-[9px] font-mono text-cyan-900">POLL:10s</span>
+          <button @click="openResetGpuModal()"
+                  class="btn-sm bg-cyan-500/5 hover:bg-cyan-500/10 text-cyan-700 hover:text-cyan-400
+                         border border-cyan-500/10 hover:border-cyan-500/25 font-mono text-[10px] tracking-wider">
+            <svg class="w-3 h-3"><use href="#ic-refresh"/></svg>
+            RESET
+          </button>
+        </div>
+      </div>
+
+      <!-- Slot readout -->
+      <div class="grid grid-cols-3 gap-6 mb-5">
+        <div>
+          <p class="text-3xl font-bold font-mono tabular-nums leading-none"
+             :class="gpuBarColor().replace('bg-', 'text-')"
+             x-text="gpu.slots_in_use ?? 0">
+          </p>
+          <p class="text-[9px] font-mono tracking-[0.18em] text-cyan-900 mt-2">SLOTS IN USE</p>
+        </div>
+        <div>
+          <p class="text-3xl font-bold font-mono tabular-nums text-slate-600 leading-none"
+             x-text="gpu.slots_available ?? '—'">
+          </p>
+          <p class="text-[9px] font-mono tracking-[0.18em] text-cyan-900 mt-2">AVAILABLE</p>
+        </div>
+        <div>
+          <p class="text-3xl font-bold font-mono tabular-nums text-slate-700 leading-none"
+             x-text="gpu.slots_total ?? '—'">
+          </p>
+          <p class="text-[9px] font-mono tracking-[0.18em] text-cyan-900 mt-2">CAPACITY</p>
+        </div>
+      </div>
+
+      <!-- Bar -->
+      <div class="h-1.5 bg-black/50 border border-cyan-500/8 overflow-hidden">
+        <div class="h-full transition-all duration-700"
+             :class="gpuBarColor()"
+             :style="'width: ' + gpuBarWidth()">
+        </div>
+      </div>
+      <div class="flex justify-between mt-1">
+        <span class="text-[9px] font-mono text-cyan-950">0</span>
+        <span class="text-[9px] font-mono text-cyan-950" x-text="gpu.slots_total ?? ''"></span>
+      </div>
+    </div>
+
+  </div>
+</div>

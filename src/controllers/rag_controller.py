@@ -1,3 +1,4 @@
+import asyncio
 from typing import List
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -162,8 +163,10 @@ async def handle_summarize_document(collection_name: str, filename: str, app_nam
 
 async def handle_compare_documents(collection_name: str, file_1: str, file_2: str, app_name: str) -> dict:
     try:
-        doc1_text = await get_full_document_text(collection_name=collection_name, app_name=app_name, filename=file_1)
-        doc2_text = await get_full_document_text(collection_name=collection_name, app_name=app_name, filename=file_2)
+        doc1_text, doc2_text = await asyncio.gather(
+            get_full_document_text(collection_name=collection_name, app_name=app_name, filename=file_1),
+            get_full_document_text(collection_name=collection_name, app_name=app_name, filename=file_2),
+        )
         comparison = await generate_comparison(doc1_text, doc2_text, file_1, file_2, app_name=app_name)
         logger.info(f"Generated comparison between {file_1} and {file_2} for app: {app_name}")
         return {"file_1": file_1, "file_2": file_2, "comparison": comparison}

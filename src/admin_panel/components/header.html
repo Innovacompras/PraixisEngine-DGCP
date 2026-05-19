@@ -1,0 +1,17 @@
+<!-- ═══════════════════════════════════════════════════════
+     TOP BAR — breadcrumb path + refresh
+     ═══════════════════════════════════════════════════════ -->
+<header class="bg-[#060c18]/80 border-b border-cyan-500/10 px-6 py-3 flex items-center justify-between shrink-0 backdrop-blur-sm">
+
+  <div class="flex items-center gap-1.5 font-mono text-xs">
+    <span class="text-cyan-800">SYS</span>
+    <span class="text-cyan-900">›</span>
+    <span class="text-cyan-500 font-semibold tracking-wider" x-text="viewTitle.toUpperCase()"></span>
+  </div>
+
+  <button @click="refreshCurrentView()" class="btn-ghost text-xs font-mono tracking-wider" :disabled="isLoading">
+    <svg class="w-3.5 h-3.5" :class="isLoading && 'animate-spin'"><use href="#ic-refresh"/></svg>
+    REFRESH
+  </button>
+
+</header>

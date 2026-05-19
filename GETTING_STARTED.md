@@ -33,8 +33,10 @@ AI_API_URL=http://localhost:8081
 AI_API_KEY=your-local-key
 MODEL_NAME=gemma3:12b
 
-# GPU Concurrency — max simultaneous LLM calls (returns 503 when exceeded)
-GPU_CONCURRENCY=2
+# GPU Concurrency
+GPU_CONCURRENCY=2       # max simultaneous LLM calls
+GPU_WAIT_TIMEOUT=30     # seconds to wait for a free slot before returning 503
+CHUNK_CONCURRENCY=4     # parallel chunk fan-out per file_summary call
 
 # Redis
 REDIS_URL=redis://localhost:6379/0
@@ -64,7 +66,8 @@ ADMIN_PASSWORD=your_admin_password
 uv run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-API docs are available at `http://localhost:8080/docs`.
+- API docs: `http://localhost:8080/docs`
+- Admin panel: `http://localhost:8080/admin` (use `ADMIN_USERNAME` / `ADMIN_PASSWORD`)
 
 ---
 
@@ -164,6 +167,7 @@ Save this ID and pass it as `session_id` in follow-up messages to continue the c
 
 ## Next Steps
 
+- Open the admin panel at `http://localhost:8080/admin` to manage keys, monitor GPU usage, and browse vector collections
 - Upload documents and ask questions: see **RAG** endpoints in [README.md](README.md#api-reference)
 - Check system health: `GET /api/system/health` (admin credentials required)
 - Review all endpoints: [README.md → API Reference](README.md#api-reference)

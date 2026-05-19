@@ -163,20 +163,29 @@ async def remove_api_key(full_key: str) -> bool:
 
 
 async def list_all_api_keys() -> list[dict]:
+    keys = [key async for key in redis_client.scan_iter("apikey:*")]
+    if not keys:
+        return []
+    values = await redis_client.mget(*keys)
     entries: list[dict] = []
-    async for redis_key in redis_client.scan_iter("apikey:*"):
-        raw = await redis_client.get(redis_key)
-        if isinstance(raw, str):
-            try:
-                data = json.loads(raw)
-                entries.append({
-                    "app_name": data.get("app_name"),
-                    "key_preview": data.get("key_preview"),
-                    "created_at": data.get("created_at"),
-                })
-            except (json.JSONDecodeError, AttributeError):
-                pass
+    for redis_key, raw in zip(keys, values):
+        if not isinstance(raw, str):
+            continue
+        try:
+            data = json.loads(raw)
+            entries.append({
+                "app_name": data.get("app_name"),
+                "key_preview": data.get("key_preview"),
+                "created_at": data.get("created_at"),
+                "key_hash": str(redis_key).split(":", 1)[1],
+            })
+        except (json.JSONDecodeError, AttributeError):
+            pass
     return entries
+
+
+async def remove_api_key_by_hash(key_hash: str) -> bool:
+    return await redis_client.delete(f"apikey:{key_hash}") > 0  # type: ignore[operator]
 
 
 async def delete_all_app_sessions(app_name: str) -> int:

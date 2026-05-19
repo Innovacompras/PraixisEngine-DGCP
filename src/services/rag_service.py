@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import AsyncGenerator
 from src.utils.ai_client import get_async_ai_client, record_llm_usage
@@ -7,6 +8,8 @@ from src.utils.concurrency import gpu_slot, release_gpu_slot
 
 _client = get_async_ai_client()
 _MODEL_NAME = os.getenv("MODEL_NAME", "gemma-api-test")
+_CHUNK_CONCURRENCY = int(os.getenv("CHUNK_CONCURRENCY", "4"))
+_chunk_sem = asyncio.Semaphore(_CHUNK_CONCURRENCY)
 
 
 async def _call_llm(prompt: str, app_name: str) -> str:
@@ -126,9 +129,11 @@ async def _map_reduce(
             return await _call_llm(f"{single_chunk_prompt}\n\n{chunks[0]}", app_name)
         return chunks[0]
 
-    extracted = []
-    for chunk in chunks:
-        extracted.append(await _call_llm(f"{map_prompt}\n\n{chunk}", app_name))
+    async def _run(chunk: str) -> str:
+        async with _chunk_sem:
+            return await _call_llm(f"{map_prompt}\n\n{chunk}", app_name)
+
+    extracted = list(await asyncio.gather(*[_run(chunk) for chunk in chunks]))
     return await _call_llm(f"{reduce_prompt}\n\n" + "\n\n".join(extracted), app_name)
 
 
@@ -145,17 +150,19 @@ async def generate_summary(document_text: str, app_name: str) -> str:
 
 async def generate_comparison(doc1_text: str, doc2_text: str, file_1: str, file_2: str, app_name: str) -> str:
     """Compares two documents using map-reduce to preserve full context."""
-    digest_1 = await _map_reduce(
-        doc1_text,
-        map_prompt=f"Extract every distinct fact, rule, figure, and clause from the following excerpt of '{file_1}'. Be exhaustive — nothing should be lost. Use concise bullet points:",
-        reduce_prompt=f"The following are extracted notes from all sections of '{file_1}'. Consolidate them into a single, organised list of key facts — remove duplicates but preserve all unique information:",
-        app_name=app_name,
-    )
-    digest_2 = await _map_reduce(
-        doc2_text,
-        map_prompt=f"Extract every distinct fact, rule, figure, and clause from the following excerpt of '{file_2}'. Be exhaustive — nothing should be lost. Use concise bullet points:",
-        reduce_prompt=f"The following are extracted notes from all sections of '{file_2}'. Consolidate them into a single, organised list of key facts — remove duplicates but preserve all unique information:",
-        app_name=app_name,
+    digest_1, digest_2 = await asyncio.gather(
+        _map_reduce(
+            doc1_text,
+            map_prompt=f"Extract every distinct fact, rule, figure, and clause from the following excerpt of '{file_1}'. Be exhaustive — nothing should be lost. Use concise bullet points:",
+            reduce_prompt=f"The following are extracted notes from all sections of '{file_1}'. Consolidate them into a single, organised list of key facts — remove duplicates but preserve all unique information:",
+            app_name=app_name,
+        ),
+        _map_reduce(
+            doc2_text,
+            map_prompt=f"Extract every distinct fact, rule, figure, and clause from the following excerpt of '{file_2}'. Be exhaustive — nothing should be lost. Use concise bullet points:",
+            reduce_prompt=f"The following are extracted notes from all sections of '{file_2}'. Consolidate them into a single, organised list of key facts — remove duplicates but preserve all unique information:",
+            app_name=app_name,
+        ),
     )
 
     return await _call_llm(

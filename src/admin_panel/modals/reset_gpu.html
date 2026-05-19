@@ -1,0 +1,48 @@
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: Confirm GPU Counter Reset
+     ═══════════════════════════════════════════════════════ -->
+<div x-show="modal === 'resetGpu'"
+     x-transition:enter="transition ease-out duration-150"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     @keydown.escape.window="modal = null"
+     class="modal-overlay">
+
+  <div class="modal-box"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0 scale-95"
+       x-transition:enter-end="opacity-100 scale-100"
+       @click.stop>
+
+    <!-- Header -->
+    <div class="px-6 pt-6 pb-4 border-b border-slate-700">
+      <h3 class="font-semibold text-slate-100">Reset GPU Counter</h3>
+    </div>
+
+    <!-- Body -->
+    <div class="px-6 py-5 space-y-3">
+      <p class="text-sm text-slate-300">
+        This resets the slot counter to <strong class="text-slate-100">0</strong>,
+        freeing all tracked GPU slots.
+      </p>
+      <div class="flex items-start gap-2.5 bg-red-500/10 border border-red-500/25 rounded-lg p-3.5">
+        <svg class="w-4 h-4 text-red-400 shrink-0 mt-0.5"><use href="#ic-warn"/></svg>
+        <p class="text-sm text-red-300">
+          Only use this if the counter is <strong>stale</strong> after a crash.
+          Resetting while legitimate requests are in-flight can oversubscribe the GPU.
+        </p>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-6 pb-6 flex justify-end gap-3">
+      <button @click="modal = null" class="btn-ghost">Cancel</button>
+      <button @click="resetGpu()" class="btn-danger" :disabled="modalLoading">
+        <span x-show="modalLoading" class="spinner"></span>
+        <svg x-show="!modalLoading" class="w-4 h-4"><use href="#ic-refresh"/></svg>
+        Reset Counter
+      </button>
+    </div>
+
+  </div>
+</div>

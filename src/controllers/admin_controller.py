@@ -8,9 +8,16 @@ from src.utils.memory import (
     get_all_app_names,
     store_api_key,
     remove_api_key,
+    remove_api_key_by_hash,
     list_all_api_keys,
 )
-from src.utils.vector_db import chroma_client
+from src.utils.vector_db import (
+    chroma_client,
+    list_files_in_collection as _list_collection_files,
+    delete_collection as _delete_collection,
+    delete_file_from_collection as _delete_file,
+    search_collection as _search_collection,
+)
 from src.utils.ai_client import get_ai_client
 from src.utils.concurrency import get_gpu_status, reset_gpu_counter
 from src.utils.audit import log_event, get_audit_log
@@ -20,40 +27,55 @@ from src.utils.logger import logger
 _llm_sync_client = get_ai_client()
 
 
-async def get_health_status() -> dict:
-    health_status = {"api": "online", "redis": "offline", "chromadb": "offline", "llm": "offline"}
-
+async def get_redis_health() -> dict:
     try:
         await redis_client.ping()  # type: ignore[misc]
-        health_status["redis"] = "online"
+        return {"status": "online"}
     except Exception:
         logger.error("Redis health check failed.")
+        return {"status": "offline"}
 
+
+async def get_chromadb_health() -> dict:
     try:
         await asyncio.to_thread(chroma_client.list_collections)
-        health_status["chromadb"] = "online"
+        return {"status": "online"}
     except Exception:
         logger.error("ChromaDB health check failed.")
+        return {"status": "offline"}
 
+
+async def get_llm_health() -> dict:
     try:
         await asyncio.to_thread(lambda: _llm_sync_client.with_options(timeout=5.0).models.list())
-        health_status["llm"] = "online"
+        return {"status": "online"}
     except Exception:
         logger.error("LLM backend health check failed.")
+        return {"status": "offline"}
 
-    return health_status
+
+async def get_health_status() -> dict:
+    redis_s, chroma_s, llm_s = await asyncio.gather(
+        get_redis_health(), get_chromadb_health(), get_llm_health()
+    )
+    return {"api": "online", "redis": redis_s["status"], "chromadb": chroma_s["status"], "llm": llm_s["status"]}
 
 
 async def get_system_stats() -> dict:
-    active_sessions = 0
-    async for _ in redis_client.scan_iter("chat:*"):
-        active_sessions += 1
+    async def _count_sessions():
+        count = 0
+        async for _ in redis_client.scan_iter("chat:*"):
+            count += 1
+        return count
 
     def _count_vectors():
         cols = chroma_client.list_collections()
         return len(cols), sum(col.count() for col in cols)
 
-    num_collections, total_vectors = await asyncio.to_thread(_count_vectors)
+    active_sessions, (num_collections, total_vectors) = await asyncio.gather(
+        _count_sessions(),
+        asyncio.to_thread(_count_vectors),
+    )
 
     return {
         "active_chat_sessions": active_sessions,
@@ -93,13 +115,23 @@ async def delete_app_sessions(app_name: str) -> dict:
     return {"status": "success", "sessions_deleted": count, "app_name": app_name}
 
 
+async def revoke_api_key_by_hash(key_hash: str) -> dict:
+    deleted = await remove_api_key_by_hash(key_hash)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="API Key not found.")
+    await log_event("KEY_REVOKED", {"key_hash_preview": key_hash[:8] + "..."})
+    logger.info("Revoked an API Key by hash.")
+    return {"status": "success", "message": "API Key permanently revoked."}
+
+
 async def get_app_usage(app_name: str) -> dict:
     return await get_usage(app_name)
 
 
 async def get_all_usage() -> dict:
     app_names = await get_all_app_names()
-    return {"apps": [await get_usage(name) for name in app_names]}
+    usages = await asyncio.gather(*[get_usage(name) for name in app_names])
+    return {"apps": list(usages)}
 
 
 async def get_gpu() -> dict:
@@ -120,3 +152,61 @@ async def get_global_audit(limit: int = 100, offset: int = 0) -> dict:
 async def get_app_audit(app_name: str, limit: int = 100, offset: int = 0) -> dict:
     events = await get_audit_log(app_name=app_name, limit=limit, offset=offset)
     return {"app_name": app_name, "total_returned": len(events), "events": events}
+
+
+# ── Vector DB admin ───────────────────────────────────────────────────────────
+
+async def admin_list_all_collections() -> dict:
+    def _run():
+        cols = chroma_client.list_collections()
+        result = []
+        for col in cols:
+            app_name = col.metadata.get("app", "unknown") if col.metadata else "unknown"
+            display_name = col.name[len(app_name) + 1:] if col.name.startswith(f"{app_name}_") else col.name
+            result.append({
+                "app_name": app_name,
+                "collection_name": display_name,
+                "chunk_count": col.count(),
+            })
+        return sorted(result, key=lambda x: (x["app_name"], x["collection_name"]))
+
+    collections = await asyncio.to_thread(_run)
+    total_chunks = sum(c["chunk_count"] for c in collections)
+    return {"total_collections": len(collections), "total_chunks": total_chunks, "collections": collections}
+
+
+async def admin_list_collection_files(app_name: str, collection_name: str) -> dict:
+    try:
+        files = await _list_collection_files(collection_name=collection_name, app_name=app_name)
+        return {"app_name": app_name, "collection_name": collection_name, "files": sorted(files)}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+async def admin_delete_collection(app_name: str, collection_name: str) -> dict:
+    success = await _delete_collection(collection_name=collection_name, app_name=app_name)
+    if not success:
+        raise HTTPException(status_code=404, detail="Collection not found.")
+    await log_event("COLLECTION_DELETED", {"collection": collection_name}, app_name=app_name)
+    logger.info(f"Admin deleted collection '{collection_name}' for app '{app_name}'")
+    return {"status": "success", "message": f"Collection '{collection_name}' deleted."}
+
+
+async def admin_vector_search(app_name: str, collection_name: str, query: str, n_results: int = 5) -> dict:
+    try:
+        results = await _search_collection(
+            collection_name=collection_name, app_name=app_name, query=query, n_results=n_results
+        )
+        return {"query": query, "app_name": app_name, "collection_name": collection_name, "results": results}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+async def admin_delete_file(app_name: str, collection_name: str, filename: str) -> dict:
+    try:
+        await _delete_file(collection_name=collection_name, filename=filename, app_name=app_name)
+        await log_event("FILE_DELETED", {"filename": filename, "collection": collection_name}, app_name=app_name)
+        logger.info(f"Admin deleted file '{filename}' from '{collection_name}' for app '{app_name}'")
+        return {"status": "success", "message": f"File '{filename}' deleted."}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))

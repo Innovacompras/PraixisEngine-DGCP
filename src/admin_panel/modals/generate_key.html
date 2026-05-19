@@ -1,0 +1,49 @@
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: Generate API Key
+     ═══════════════════════════════════════════════════════ -->
+<div x-show="modal === 'generateKey'"
+     x-transition:enter="transition ease-out duration-150"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     @keydown.escape.window="modal = null"
+     class="modal-overlay">
+
+  <div class="modal-box"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0 scale-95"
+       x-transition:enter-end="opacity-100 scale-100"
+       @click.stop>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-700">
+      <h3 class="font-semibold text-slate-100">Generate API Key</h3>
+      <button title="generate api key" @click="modal = null" class="text-slate-500 hover:text-slate-300 transition-colors">
+        <svg class="w-5 h-5"><use href="#ic-x"/></svg>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="px-6 py-5">
+      <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">App Name</label>
+      <input x-model="newAppName"
+             type="text"
+             placeholder="my-application"
+             class="input"
+             @keydown.enter="generateKey()"
+             pattern="[a-zA-Z0-9_\-]{3,63}" />
+      <p class="text-xs text-slate-600 mt-1.5">Letters, numbers, hyphens and underscores. 3–63 characters.</p>
+      <p x-show="newAppNameError" class="text-xs text-red-400 mt-1" x-text="newAppNameError"></p>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-6 pb-6 flex justify-end gap-3">
+      <button @click="modal = null" class="btn-ghost">Cancel</button>
+      <button @click="generateKey()" class="btn-primary" :disabled="modalLoading || !newAppName.trim()">
+        <span x-show="modalLoading" class="spinner"></span>
+        <svg x-show="!modalLoading" class="w-4 h-4"><use href="#ic-key"/></svg>
+        Generate
+      </button>
+    </div>
+
+  </div>
+</div>

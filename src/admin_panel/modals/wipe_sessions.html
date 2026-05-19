@@ -1,0 +1,47 @@
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: Confirm Wipe Sessions
+     ═══════════════════════════════════════════════════════ -->
+<div x-show="modal === 'wipeSessions'"
+     x-transition:enter="transition ease-out duration-150"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     @keydown.escape.window="modal = null"
+     class="modal-overlay">
+
+  <div class="modal-box"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0 scale-95"
+       x-transition:enter-end="opacity-100 scale-100"
+       @click.stop>
+
+    <!-- Header -->
+    <div class="px-6 pt-6 pb-4 border-b border-slate-700">
+      <h3 class="font-semibold text-slate-100">Wipe Sessions</h3>
+    </div>
+
+    <!-- Body -->
+    <div class="px-6 py-5 space-y-3">
+      <p class="text-sm text-slate-300">
+        This will delete all active chat sessions for
+        <strong class="text-slate-100" x-text="modalData.app_name"></strong>.
+        Users will lose their conversation history.
+      </p>
+      <p class="text-xs text-amber-400 flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 shrink-0"><use href="#ic-warn"/></svg>
+        Active conversations will be terminated immediately.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-6 pb-6 flex justify-end gap-3">
+      <button @click="modal = null" class="btn-ghost">Cancel</button>
+      <button @click="wipeSessions()"
+              class="btn bg-amber-600 hover:bg-amber-700 text-white"
+              :disabled="modalLoading">
+        <span x-show="modalLoading" class="spinner"></span>
+        Wipe Sessions
+      </button>
+    </div>
+
+  </div>
+</div>

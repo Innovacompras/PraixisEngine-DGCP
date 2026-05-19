@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Praixis Admin</title>
+  <link rel="icon" type="image/png" href="/static/img/logo.png" />
+
+  <!-- Tailwind CDN (handles utility classes in HTML) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { brand: { DEFAULT: '#06b6d4', dark: '#0891b2', light: '#67e8f9' } }
+        }
+      }
+    }
+  </script>
+
+  <!-- Component stylesheets -->
+  <link rel="stylesheet" href="/static/css/admin.css" />
+  <link rel="stylesheet" href="/static/css/layout.css" />
+  <link rel="stylesheet" href="/static/css/buttons.css" />
+  <link rel="stylesheet" href="/static/css/forms.css" />
+  <link rel="stylesheet" href="/static/css/modal.css" />
+</head>
+
+<body class="bg-[#060c18] text-slate-300 font-sans antialiased" x-data="adminApp()" x-cloak>
+
+  {% include "components/icons.html" %}
+
+  <!-- ── Init loading screen (shown while session is being restored) ── -->
+  <div x-show="initializing"
+       class="min-h-screen flex items-center justify-center bg-slate-950">
+    <div class="spinner"></div>
+  </div>
+
+  {% include "components/login.html" %}
+
+  <!-- ── Main application shell ── -->
+  <div x-show="isLoggedIn"
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       class="flex h-screen overflow-hidden">
+
+    {% include "components/sidebar.html" %}
+
+    <div class="flex-1 flex flex-col overflow-hidden">
+      {% include "components/header.html" %}
+
+      <main class="flex-1 overflow-y-auto p-6 space-y-6">
+        {% include "views/dashboard.html" %}
+        {% include "views/keys.html" %}
+        {% include "views/usage.html" %}
+        {% include "views/vector.html" %}
+        {% include "views/audit.html" %}
+      </main>
+    </div>
+  </div>
+
+  <!-- ── Modals ── -->
+  {% include "modals/generate_key.html" %}
+  {% include "modals/key_result.html" %}
+  {% include "modals/revoke_key.html" %}
+  {% include "modals/wipe_sessions.html" %}
+  {% include "modals/reset_gpu.html" %}
+  {% include "modals/delete_collection.html" %}
+  {% include "modals/delete_file.html" %}
+
+  {% include "components/toast.html" %}
+
+  <!-- Feature modules must load before admin.js assembles them -->
+  <script src="/static/js/helpers.js"></script>
+  <script src="/static/js/dashboard.js"></script>
+  <script src="/static/js/keys.js"></script>
+  <script src="/static/js/usage.js"></script>
+  <script src="/static/js/audit.js"></script>
+  <script src="/static/js/vector.js"></script>
+  <!-- Core: state, auth, nav, and module assembly -->
+  <script src="/static/js/admin.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+
+</body>
+</html>

@@ -160,6 +160,45 @@ async def query_rag_db(
     return await asyncio.to_thread(_run)
 
 
+async def search_collection(
+    collection_name: str,
+    app_name: str,
+    query: str,
+    n_results: int = 5,
+) -> List[Dict[str, Any]]:
+    def _run():
+        try:
+            collection = chroma_client.get_collection(name=_scoped_name(app_name, collection_name))
+        except Exception:
+            raise ValueError(f"Collection '{collection_name}' does not exist.")
+        if not collection.metadata or collection.metadata.get("app") != app_name:
+            raise ValueError("Access denied.")
+        count = collection.count()
+        if count == 0:
+            return []
+        results = collection.query(
+            query_texts=[query],
+            n_results=min(n_results, count),
+            include=["documents", "metadatas", "distances"],
+        )
+        docs      = results.get("documents")
+        metas     = results.get("metadatas")
+        distances = results.get("distances")
+        retrieved = []
+        if docs and docs[0]:
+            for i in range(len(docs[0])):
+                meta_dict = metas[0][i] if metas and metas[0] else {}
+                distance  = distances[0][i] if distances and distances[0] else None
+                retrieved.append({
+                    "source": str(meta_dict.get("source", "Unknown")) if meta_dict else "Unknown",
+                    "text": docs[0][i],
+                    "score": round(1 / (1 + distance), 3) if distance is not None else None,
+                })
+        return retrieved
+
+    return await asyncio.to_thread(_run)
+
+
 async def get_full_document_text(collection_name: str, app_name: str, filename: str) -> str:
     def _run():
         try:

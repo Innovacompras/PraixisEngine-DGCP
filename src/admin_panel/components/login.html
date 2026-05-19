@@ -1,0 +1,94 @@
+<!-- ═══════════════════════════════════════════════════════
+     LOGIN — secure terminal access
+     ═══════════════════════════════════════════════════════ -->
+<div x-show="!isLoggedIn && !initializing"
+     x-transition:enter="transition ease-out duration-300"
+     x-transition:enter-start="opacity-0 scale-95"
+     x-transition:enter-end="opacity-100 scale-100"
+     class="min-h-screen flex items-center justify-center p-4 bg-[#060c18]">
+
+  <!-- Background glow -->
+  <div class="absolute inset-0 overflow-hidden pointer-events-none">
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px]"
+         style="background: radial-gradient(circle, rgba(6,182,212,0.04) 0%, transparent 65%)"></div>
+  </div>
+
+  <div class="relative w-full max-w-sm">
+
+    <!-- Terminal window chrome -->
+    <div class="border border-cyan-500/15 rounded-sm overflow-hidden"
+         style="box-shadow: 0 0 0 1px rgba(6,182,212,0.05), 0 40px 80px rgba(0,0,0,0.85), 0 0 60px rgba(6,182,212,0.04)">
+
+      <!-- Title bar -->
+      <div class="bg-[#0a1628] border-b border-cyan-500/10 px-4 py-2.5 flex items-center gap-2.5">
+        <img src="/static/img/logo.png" alt="" class="w-3.5 h-3.5 object-contain opacity-70 shrink-0" />
+        <span class="text-[10px] font-mono tracking-[0.18em] text-cyan-700">PRAXIS ENGINE — SECURE TERMINAL</span>
+      </div>
+
+      <!-- Body -->
+      <div class="bg-[#060c18] px-7 py-8">
+
+        <!-- Brand mark -->
+        <div class="text-center mb-8">
+          <div class="inline-flex items-center justify-center w-12 h-12 border border-cyan-500/20 bg-cyan-500/5 mb-4">
+            <img src="/static/img/logo.png" alt="Praixis" class="w-8 h-8 object-contain" />
+          </div>
+          <h1 class="text-base font-bold font-mono tracking-[0.22em] text-cyan-300">PRAXIS</h1>
+          <p class="text-[10px] font-mono tracking-[0.18em] text-cyan-800 mt-1">CONTROL TERMINAL v2.0</p>
+        </div>
+
+        <!-- Auth form -->
+        <form @submit.prevent="login()" class="space-y-5">
+
+          <div>
+            <label class="block text-[9px] font-mono tracking-[0.22em] text-cyan-700 uppercase mb-1.5">
+              Operator ID
+            </label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-cyan-700 font-mono text-sm select-none pointer-events-none">›</span>
+              <input x-model="loginUsername" type="text" autocomplete="username"
+                     placeholder="username" class="input pl-7" required />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[9px] font-mono tracking-[0.22em] text-cyan-700 uppercase mb-1.5">
+              Auth Key
+            </label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-cyan-700 font-mono text-sm select-none pointer-events-none">›</span>
+              <input x-model="loginPassword" type="password" autocomplete="current-password"
+                     placeholder="••••••••" class="input pl-7" required />
+            </div>
+          </div>
+
+          <!-- Error -->
+          <div x-show="loginError" x-transition
+               class="flex items-center gap-2 border border-red-500/20 bg-red-500/5 rounded-sm px-3 py-2">
+            <svg class="w-3.5 h-3.5 text-red-400 shrink-0"><use href="#ic-warn"/></svg>
+            <p class="text-xs font-mono text-red-400" x-text="loginError"></p>
+          </div>
+
+          <button type="submit"
+                  class="w-full btn-primary justify-center py-2.5 font-mono tracking-[0.15em] text-sm"
+                  :disabled="loginLoading">
+            <span x-show="loginLoading" class="spinner"></span>
+            <span x-text="loginLoading ? 'AUTHENTICATING...' : 'AUTHENTICATE'"></span>
+          </button>
+
+        </form>
+
+      </div>
+
+      <!-- Status bar -->
+      <div class="bg-[#0a1628]/60 border-t border-cyan-500/10 px-4 py-1.5 flex items-center justify-between">
+        <span class="text-[9px] font-mono text-cyan-900">PRAXIS ENGINE v2.0</span>
+        <div class="flex items-center gap-1.5">
+          <span class="w-1 h-1 rounded-full bg-cyan-500" style="box-shadow: 0 0 4px rgba(6,182,212,0.8)"></span>
+          <span class="text-[9px] font-mono text-cyan-900">INTERNAL SYSTEM</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

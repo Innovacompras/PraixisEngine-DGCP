@@ -16,7 +16,7 @@ A multi-tenant AI backend API that provides decoupled business logic for LLM-pow
 - **Audit Log** — Redis-backed event log tracking key generation/revocation, auth failures, file operations, and admin actions — paginated per app or globally
 - **Admin Panel** — HTTP Basic Auth-protected endpoints for provisioning/revoking API keys, wiping sessions, token usage stats, GPU monitoring, and audit log access
 - **Rate Limiting** — Per-API-key, per-endpoint request limits to protect GPU resources (falls back to IP for unauthenticated routes)
-- **Redis-backed GPU Concurrency** — Atomic slot counter shared across all workers; returns `503` immediately when at capacity rather than queuing. Resets automatically on startup
+- **Redis-backed GPU Concurrency** — Atomic slot counter shared across all workers; blocks up to `GPU_WAIT_TIMEOUT` seconds (default 30 s) waiting for a free slot, then returns `503`. Resets automatically on startup
 - **Usage Tracking** — Per-app prompt/completion token counters in Redis, exposed via admin endpoints
 - **Async I/O** — Fully async stack: `redis.asyncio`, `AsyncOpenAI`, ChromaDB calls offloaded via `asyncio.to_thread`
 - **Structured Output** — Optional `response_format: "json"` field on chat requests for machine-readable responses
@@ -96,11 +96,22 @@ PraixisEngine/
 ├── docker-compose.local.yml   # Overlay: adds Redis container for local dev
 ├── pyproject.toml
 └── src/
+    ├── admin_panel/           # Browser-based admin UI (served at /admin)
+    │   ├── base.html          # Root template — assembles all includes
+    │   ├── components/        # Shared UI fragments (sidebar, header, login, toast, icons)
+    │   ├── views/             # Page panels (dashboard, keys, usage, vector, audit)
+    │   ├── modals/            # Dialog overlays (generate key, revoke, wipe sessions, etc.)
+    │   └── static/
+    │       ├── css/           # admin.css, layout.css, buttons.css, forms.css, modal.css
+    │       ├── js/            # admin.js (core), dashboard.js, keys.js, usage.js,
+    │       │                  #   audit.js, vector.js, helpers.js
+    │       └── img/           # logo.png
     ├── routes/
     │   ├── main_router.py     # Assembles all routers
     │   ├── chat_router.py     # /general-requests endpoints
     │   ├── rag_router.py      # /rag-db endpoints
-    │   └── admin_router.py    # /api/system endpoints
+    │   ├── admin_router.py    # /api/system endpoints
+    │   └── ui_router.py       # Serves /admin and /static/*
     ├── controllers/
     │   ├── chat_controller.py
     │   ├── rag_controller.py
@@ -293,13 +304,20 @@ Response:
 
 ### Admin Endpoints (Basic Auth)
 
+All admin endpoints require HTTP Basic Auth (`ADMIN_USERNAME` / `ADMIN_PASSWORD`) except `/ping`.
+
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/system/health` | Check Redis, ChromaDB, and LLM backend status |
+| `GET` | `/api/system/ping` | Liveness check — no auth required |
+| `GET` | `/api/system/health` | Aggregate health of Redis, ChromaDB, and LLM backend |
+| `GET` | `/api/system/health/redis` | Redis health only |
+| `GET` | `/api/system/health/chromadb` | ChromaDB health only |
+| `GET` | `/api/system/health/llm` | LLM backend health only |
 | `GET` | `/api/system/stats` | Active sessions, collection count, total vector chunks |
 | `GET` | `/api/system/keys` | List all provisioned keys (preview + created_at) and their app names |
 | `POST` | `/api/system/keys/generate?app_name=` | Generate a new API key |
-| `DELETE` | `/api/system/keys/revoke?api_key=` | Permanently revoke an API key (pass the full plaintext key, not the preview) |
+| `DELETE` | `/api/system/keys/revoke?api_key=` | Revoke a key by its plaintext value |
+| `DELETE` | `/api/system/keys/revoke-by-hash?hash=` | Revoke a key by its stored SHA-256 hash |
 | `DELETE` | `/api/system/sessions/{app_name}` | Force-wipe all active sessions for a specific app |
 | `GET` | `/api/system/usage` | Token usage totals across all apps |
 | `GET` | `/api/system/usage/{app_name}` | Token usage totals for a specific app |
@@ -307,6 +325,11 @@ Response:
 | `POST` | `/api/system/gpu/reset` | Reset GPU slot counter to 0 (use after a crash leaves it stuck) |
 | `GET` | `/api/system/audit?limit=100&offset=0` | Last N audit events across all apps, newest first |
 | `GET` | `/api/system/audit/{app_name}` | Last N audit events for a specific app |
+| `GET` | `/api/system/vector/search?app_name=&collection_name=&query=&n_results=5` | Semantic search inside a collection |
+| `GET` | `/api/system/vector/collections` | List all vector collections across all apps |
+| `GET` | `/api/system/vector/collections/{app_name}/{collection_name}/files` | List files in a collection |
+| `DELETE` | `/api/system/vector/collections/{app_name}/{collection_name}` | Delete an entire collection |
+| `DELETE` | `/api/system/vector/collections/{app_name}/{collection_name}/files` | Delete a specific file from a collection (query param: `filename`) |
 
 ---
 
@@ -334,7 +357,13 @@ Exceeding a limit returns HTTP `429 Too Many Requests`.
 
 Endpoints that call the LLM (`/chat`, `/ask`, `/file_summary`, `/summarize`, `/compare`) share a slot counter stored in Redis under the key `gpu:in_use`, sized by `GPU_CONCURRENCY` (default: `2`).
 
-Redis `INCR`/`DECR` are atomic, so the counter is correct across multiple uvicorn workers. When all slots are occupied, new requests immediately return HTTP `503 Service Unavailable` rather than queuing. Callers should retry with backoff.
+| Env var | Default | Description |
+|---|---|---|
+| `GPU_CONCURRENCY` | `2` | Max simultaneous LLM calls |
+| `GPU_WAIT_TIMEOUT` | `30` | Seconds a request waits for a free slot before returning 503 |
+| `CHUNK_CONCURRENCY` | `4` | Max parallel chunk fan-out per `file_summary` map-reduce call |
+
+Redis `INCR`/`DECR` are atomic, so the counter is correct across multiple uvicorn workers. When all slots are occupied, new requests block on an `asyncio.Semaphore` and wait up to `GPU_WAIT_TIMEOUT` seconds (default: `30`) for a slot to free. Only after that timeout do they return HTTP `503 Service Unavailable`. Callers may retry immediately or with a short backoff.
 
 The counter is reset to `0` on every application startup via the FastAPI lifespan hook. If a crash leaves it stuck, use `POST /api/system/gpu/reset` to clear it manually without restarting.
 
@@ -358,6 +387,24 @@ Recorded events:
 | `COLLECTION_DELETED` | Entire RAG collection deleted |
 
 Chat content and RAG query text are deliberately not logged.
+
+---
+
+## Admin Panel UI
+
+A browser-based control panel is served at `GET /admin`. It provides the same functionality as the admin API endpoints through a visual interface:
+
+- **Overview** — live service health, active session count, vector chunk count, GPU slot utilization
+- **API Keys** — generate keys, revoke keys, wipe app sessions
+- **Token Usage** — per-app prompt/completion token breakdown
+- **Vector DB** — browse collections, delete collections or files, run semantic search queries
+- **Audit Log** — paginated event log with per-app filtering
+
+Open it in a browser and authenticate with `ADMIN_USERNAME` / `ADMIN_PASSWORD`:
+
+```
+http://localhost:8080/admin
+```
 
 ---
 
