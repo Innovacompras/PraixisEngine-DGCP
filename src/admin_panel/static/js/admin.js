@@ -85,8 +85,8 @@ function adminApp() {
     // INIT
     // ══════════════════════════════════════════════════════════════════════════
     async init() {
-      const token = localStorage.getItem('praxis_admin_token');
-      const user  = localStorage.getItem('praxis_admin_user');
+      const token = sessionStorage.getItem('praxis_admin_token');
+      const user  = sessionStorage.getItem('praxis_admin_user');
       if (!token) { this.initializing = false; return; }
       this.authHeader = token;
       try {
@@ -105,8 +105,8 @@ function adminApp() {
     },
 
     clearSession() {
-      localStorage.removeItem('praxis_admin_token');
-      localStorage.removeItem('praxis_admin_user');
+      sessionStorage.removeItem('praxis_admin_token');
+      sessionStorage.removeItem('praxis_admin_user');
       this.authHeader = '';
     },
 
@@ -131,8 +131,8 @@ function adminApp() {
         const result    = await this._verifyAuth();
         if (result === true) {
           this.loggedInUser  = this.loginUsername;
-          localStorage.setItem('praxis_admin_token', this.authHeader);
-          localStorage.setItem('praxis_admin_user',  this.loginUsername);
+          sessionStorage.setItem('praxis_admin_token', this.authHeader);
+          sessionStorage.setItem('praxis_admin_user',  this.loginUsername);
           this.isLoggedIn    = true;
           this.loginPassword = '';
           this.startAutoRefresh();

@@ -4,9 +4,10 @@ function _adminDashboard() {
 
     async loadDashboard() {
       this.loading.dashboard = true;
-      await Promise.all([this.loadHealth(), this.loadStats(), this.loadGpu()]);
+      await Promise.all([this.loadStats(), this.loadGpu()]);
       this.loading.dashboard = false;
       this.dashboardLoaded   = true;
+      this.loadHealth();
     },
 
     async loadHealth() {

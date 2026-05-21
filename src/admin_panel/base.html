@@ -6,19 +6,8 @@
   <title>Praixis Admin</title>
   <link rel="icon" type="image/png" href="/static/img/logo.png" />
 
-  <!-- Tailwind CDN (handles utility classes in HTML) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: { brand: { DEFAULT: '#06b6d4', dark: '#0891b2', light: '#67e8f9' } }
-        }
-      }
-    }
-  </script>
-
   <!-- Component stylesheets -->
+  <link rel="stylesheet" href="/static/css/tailwind.css" />
   <link rel="stylesheet" href="/static/css/admin.css" />
   <link rel="stylesheet" href="/static/css/layout.css" />
   <link rel="stylesheet" href="/static/css/buttons.css" />
@@ -80,7 +69,7 @@
   <script src="/static/js/vector.js"></script>
   <!-- Core: state, auth, nav, and module assembly -->
   <script src="/static/js/admin.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+  <script defer src="/static/js/alpinejs.min.js"></script>
 
 </body>
 </html>
