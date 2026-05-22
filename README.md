@@ -94,6 +94,7 @@ PraixisEngine/
 ├── Dockerfile
 ├── docker-compose.yml         # Base: app only — use with external Redis/LLM
 ├── docker-compose.local.yml   # Overlay: adds Redis container for local dev
+├── tailwind.config.js         # Tailwind build config (brand colors, content paths)
 ├── pyproject.toml
 └── src/
     ├── admin_panel/           # Browser-based admin UI (served at /admin)
@@ -118,7 +119,8 @@ PraixisEngine/
     │   └── admin_controller.py
     ├── services/
     │   ├── chat_service.py    # LLM streaming, file summary map-reduce
-    │   └── rag_service.py     # RAG pipeline, query reformulation, comparison
+    │   ├── rag_service.py     # RAG pipeline, query reformulation, comparison
+    │   └── llm_runner.py      # Shared LLM execution, concurrent map-reduce, GPU slot management
     ├── models/
     │   └── schemas.py         # Pydantic request models
     ├── dependencies/
@@ -316,7 +318,6 @@ All admin endpoints require HTTP Basic Auth (`ADMIN_USERNAME` / `ADMIN_PASSWORD`
 | `GET` | `/api/system/stats` | Active sessions, collection count, total vector chunks |
 | `GET` | `/api/system/keys` | List all provisioned keys (preview + created_at) and their app names |
 | `POST` | `/api/system/keys/generate?app_name=` | Generate a new API key |
-| `DELETE` | `/api/system/keys/revoke?api_key=` | Revoke a key by its plaintext value |
 | `DELETE` | `/api/system/keys/revoke-by-hash?hash=` | Revoke a key by its stored SHA-256 hash |
 | `DELETE` | `/api/system/sessions/{app_name}` | Force-wipe all active sessions for a specific app |
 | `GET` | `/api/system/usage` | Token usage totals across all apps |
@@ -405,6 +406,8 @@ Open it in a browser and authenticate with `ADMIN_USERNAME` / `ADMIN_PASSWORD`:
 ```
 http://localhost:8080/admin
 ```
+
+Alpine.js (3.14.3) and Tailwind CSS are vendored locally — the admin panel makes no external requests at runtime. Admin credentials are held in `sessionStorage` and are cleared when the tab is closed.
 
 ---
 
