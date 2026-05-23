@@ -1,8 +1,6 @@
-import os
 from openai import OpenAI, AsyncOpenAI
-
-_ai_api_url = os.getenv("AI_API_URL", "http://localhost:8081")
-_ai_api_key = os.getenv("AI_API_KEY", "")
+from src.config import AI_API_URL as _ai_api_url, AI_API_KEY as _ai_api_key
+from src.utils.store.usage import record_usage
 
 
 def get_ai_client() -> OpenAI:
@@ -18,7 +16,6 @@ def get_async_ai_client() -> AsyncOpenAI:
 async def record_llm_usage(response, app_name: str) -> None:
     """Reads token counts from an OpenAI response and stores them in Redis."""
     try:
-        from src.utils.memory import record_usage  # local import avoids circular dependency
         usage = getattr(response, "usage", None)
         if usage:
             await record_usage(

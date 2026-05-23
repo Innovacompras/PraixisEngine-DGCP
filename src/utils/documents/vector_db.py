@@ -1,13 +1,11 @@
 import asyncio
-import os
 import chromadb
 import uuid
 from typing import List, Dict, Any, Set
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
-_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-_CHROMA_PATH = os.getenv("CHROMA_PATH", os.path.join(_ROOT, "chroma_data"))
+from src.config import CHROMA_PATH as _CHROMA_PATH
 chroma_client = chromadb.PersistentClient(path=_CHROMA_PATH)
 
 _embedding_fn = DefaultEmbeddingFunction()

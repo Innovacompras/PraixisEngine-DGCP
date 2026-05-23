@@ -1,14 +1,13 @@
 import asyncio
-import os
 from typing import AsyncGenerator
+from src.config import MODEL_NAME as _MODEL_NAME
 from src.utils.ai_client import get_async_ai_client, record_llm_usage
-from src.utils.file_parser import chunk_text
-from src.utils.memory import get_or_create_session, persist_history
+from src.utils.documents.file_parser import chunk_text
+from src.utils.store.sessions import get_or_create_session, persist_history
 from src.utils.concurrency import release_gpu_slot
 from src.services.llm_runner import call_llm, map_calls
 
 _client = get_async_ai_client()
-_MODEL_NAME = os.getenv("MODEL_NAME", "gemma-api-test")
 
 
 async def generate_rag_answer(

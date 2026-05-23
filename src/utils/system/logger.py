@@ -6,8 +6,8 @@ from pathlib import Path
 # 1. Ensure the logs directory exists
 Path("logs").mkdir(exist_ok=True)
 
-# 2. Create a custom logger named "praxis"
-logger = logging.getLogger("praxis")
+# 2. Create a custom logger named "praixis"
+logger = logging.getLogger("praixis")
 logger.setLevel(logging.INFO) # Captures INFO, WARNING, ERROR, and CRITICAL
 
 # 3. Define the enterprise format: [Time] | [Level] | [Message]
@@ -18,7 +18,7 @@ _formatter = logging.Formatter(
 
 # 4. The File Handler — rotates at 10 MB, keeps 5 backups before discarding
 _file_handler = RotatingFileHandler(
-    "logs/praxis.log",
+    "logs/praixis.log",
     maxBytes=10 * 1024 * 1024,
     backupCount=5
 )

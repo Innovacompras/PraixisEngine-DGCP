@@ -1,14 +1,12 @@
-from src.utils.load_env import load_env
-
 try:
-    load_env()
+    from src import config  # noqa: F401 — loads .env and parses settings (single source of truth)
 except Exception as e:
-    raise RuntimeError(f"ERROR: Could not load .env file: {e}")
+    raise RuntimeError(f"ERROR: Could not load configuration: {e}")
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from slowapi.errors import RateLimitExceeded
-from src.utils.limiter import limiter
+from src.utils.system.limiter import limiter
 from slowapi.extension import _rate_limit_exceeded_handler
 from src.routes.main_router import api_router
 
@@ -22,7 +20,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Praixis - Business logic based API",
-    description="Custom decoupled business logic API powered by Gemma 4",
+    description="Custom decoupled business logic API powered by a local OpenAI-compatible LLM.",
     version="1.0.0",
     docs_url="/swagger/docs",
     redoc_url="/docs",

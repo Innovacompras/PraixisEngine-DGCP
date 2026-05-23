@@ -2,18 +2,27 @@ FROM python:3.14-slim
 
 WORKDIR /app
 
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY . .
+# Install dependencies first — this layer is cached and only rebuilt when
+# pyproject.toml or uv.lock change, not on every source edit.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-dev && rm -rf /root/.cache/uv
 
-RUN uv sync && rm -rf /root/.cache/uv
-
-# Pre-download the ChromaDB default embedding model so first request is not slow
+# Pre-download the ChromaDB default embedding model so the first request is not
+# slow. Kept in the dependency layer so it is cached across source-only changes.
 RUN uv run python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFunction; DefaultEmbeddingFunction()(['warmup'])"
+
+# Copy the application source last so edits don't invalidate the layers above.
+COPY . .
+RUN uv sync --frozen --no-dev && rm -rf /root/.cache/uv
 
 EXPOSE 8080
 

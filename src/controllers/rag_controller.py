@@ -4,8 +4,8 @@ from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from src.models.schemas import EmbedRequest, QuestionRequest
 from src.services.rag_service import generate_comparison, generate_rag_answer, generate_summary, reformulate_query
-from src.utils.file_parser import extract_text_from_file, MAX_FILE_SIZE
-from src.utils.vector_db import (
+from src.utils.documents.file_parser import extract_text_from_file, MAX_FILE_SIZE
+from src.utils.documents.vector_db import (
     delete_file_from_collection,
     get_embedding,
     list_all_collections,
@@ -15,10 +15,10 @@ from src.utils.vector_db import (
     query_rag_db,
     get_full_document_text,
 )
-from src.utils.memory import get_session_history
-from src.utils.logger import logger
+from src.utils.store.sessions import get_session_history
+from src.utils.system.logger import logger
 from src.utils.concurrency import GPUBusyError, acquire_gpu_slot, release_gpu_slot
-from src.utils.audit import log_event
+from src.utils.store.audit import log_event
 
 
 async def handle_list_collections(app_name: str) -> dict:

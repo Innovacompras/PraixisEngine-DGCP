@@ -1,16 +1,11 @@
 import asyncio
 import secrets
 from fastapi import HTTPException
-from src.utils.memory import (
-    redis_client,
-    delete_all_app_sessions,
-    get_usage,
-    get_all_app_names,
-    store_api_key,
-    remove_api_key_by_hash,
-    list_all_api_keys,
-)
-from src.utils.vector_db import (
+from src.utils.store.client import redis_client
+from src.utils.store.sessions import delete_all_app_sessions
+from src.utils.store.usage import get_usage, get_all_app_names
+from src.utils.store.api_keys import store_api_key, remove_api_key_by_hash, list_all_api_keys
+from src.utils.documents.vector_db import (
     chroma_client,
     list_files_in_collection as _list_collection_files,
     delete_collection as _delete_collection,
@@ -19,8 +14,8 @@ from src.utils.vector_db import (
 )
 from src.utils.ai_client import get_ai_client
 from src.utils.concurrency import get_gpu_status, reset_gpu_counter
-from src.utils.audit import log_event, get_audit_log
-from src.utils.logger import logger
+from src.utils.store.audit import log_event, get_audit_log
+from src.utils.system.logger import logger
 
 # Sync client used only for the health-check ping (no LLM calls, no token tracking)
 _llm_sync_client = get_ai_client()
@@ -85,7 +80,7 @@ async def get_system_stats() -> dict:
 
 async def generate_api_key(app_name: str) -> dict:
     raw_key = secrets.token_urlsafe(32)
-    full_key = f"praxis_{raw_key}"
+    full_key = f"praixis_{raw_key}"
     await store_api_key(full_key, app_name)
     await log_event("KEY_GENERATED", {"app_name": app_name})
     logger.info(f"Generated new API Key for app: {app_name}")

@@ -66,7 +66,8 @@ ADMIN_PASSWORD=your_admin_password
 uv run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-- API docs: `http://localhost:8080/docs`
+- Swagger UI: `http://localhost:8080/swagger/docs`
+- ReDoc: `http://localhost:8080/docs`
 - Admin panel: `http://localhost:8080/admin` (use `ADMIN_USERNAME` / `ADMIN_PASSWORD`)
 
 ---
@@ -135,7 +136,7 @@ Response:
 ```json
 {
   "app_name": "my-app",
-  "api_key": "praxis_...",
+  "api_key": "praixis_...",
   "message": "Store this key safely. It will not be shown again."
 }
 ```
@@ -150,7 +151,7 @@ Include the key in the `X-API-Key` header on every request:
 
 ```bash
 curl -X POST "http://localhost:8080/general-requests/chat" \
-  -H "X-API-Key: praxis_..." \
+  -H "X-API-Key: praixis_..." \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Hello!", "session_id": null}'
 ```

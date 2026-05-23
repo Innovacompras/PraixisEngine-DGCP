@@ -5,15 +5,13 @@ token usage. Streaming endpoints that acquire the GPU slot in their controller
 (chat, rag_answer) must NOT use these helpers — they would double-acquire.
 """
 import asyncio
-import os
 from typing import AsyncGenerator
 
+from src.config import MODEL_NAME as _MODEL_NAME, CHUNK_CONCURRENCY as _CHUNK_CONCURRENCY
 from src.utils.ai_client import get_async_ai_client, record_llm_usage
 from src.utils.concurrency import gpu_slot
 
 _client = get_async_ai_client()
-_MODEL_NAME = os.getenv("MODEL_NAME", "gemma-api-test")
-_CHUNK_CONCURRENCY = int(os.getenv("CHUNK_CONCURRENCY", "4"))
 _chunk_sem = asyncio.Semaphore(_CHUNK_CONCURRENCY)
 
 Message = dict[str, str]

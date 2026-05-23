@@ -29,9 +29,18 @@ router = APIRouter(
     dependencies=[Depends(verify_admin_credentials)]
 )
 
+# Public router — no auth. Holds the liveness check used by container healthchecks.
+public_router = APIRouter(prefix="/api/system", tags=["System Admin"])
 
-@router.get("/ping")
+
+@public_router.get("/ping")
 async def admin_ping():
+    return {"ok": True}
+
+
+@router.get("/auth/verify")
+async def verify_admin_auth():
+    """Authenticated no-op the admin panel calls to validate credentials."""
     return {"ok": True}
 
 

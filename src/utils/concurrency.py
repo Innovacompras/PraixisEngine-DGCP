@@ -1,10 +1,8 @@
 import asyncio
-import os
 from contextlib import asynccontextmanager
-from src.utils.memory import redis_client
+from src.config import GPU_CONCURRENCY as _SLOTS, GPU_WAIT_TIMEOUT as _WAIT_TIMEOUT
+from src.utils.store.client import redis_client
 
-_SLOTS = int(os.getenv("GPU_CONCURRENCY", "2"))
-_WAIT_TIMEOUT = float(os.getenv("GPU_WAIT_TIMEOUT", "30"))
 _GPU_KEY = "gpu:in_use"
 
 _semaphore = asyncio.Semaphore(_SLOTS)

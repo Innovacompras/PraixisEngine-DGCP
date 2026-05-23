@@ -41,18 +41,18 @@ Client App (with X-API-Key)
         |
   ┌─────┴──────────────────────┐
   |         Services            |
-  |  chat_service.py            |  <- LLM calls, streaming, map-reduce
+  |  chat_service.py            |  <- Chat streaming, file summary
   |  rag_service.py             |  <- RAG pipeline, query reformulation
+  |  llm_runner.py              |  <- Shared LLM execution, map-reduce, GPU slots
   └─────┬──────────────────────┘
         |
   ┌─────┴──────────────────────────────┐
   |           Utilities                 |
-  |  ai_client.py  (OpenAI-compatible) |  <- LLM backend connection
-  |  memory.py     (Redis)             |  <- Sessions, API keys, usage
-  |  vector_db.py  (ChromaDB)          |  <- Persistent vector store
-  |  file_parser.py                    |  <- PDF / DOCX / TXT extraction
-  |  concurrency.py                    |  <- Redis GPU slot counter
-  |  audit.py                          |  <- Event log (Redis lists)
+  |  ai_client.py    (OpenAI-compatible)|  <- LLM backend connection
+  |  store/          (Redis)            |  <- Client, sessions, usage, keys, audit
+  |  documents/      (ChromaDB)         |  <- Vector store + file extraction
+  |  concurrency.py                     |  <- Redis GPU slot counter
+  |  system/                            |  <- logger, limiter, .env loader
   └────────────────────────────────────┘
 ```
 
@@ -97,6 +97,7 @@ PraixisEngine/
 ├── tailwind.config.js         # Tailwind build config (brand colors, content paths)
 ├── pyproject.toml
 └── src/
+    ├── config.py             # Single source of truth: loads .env and parses all env vars
     ├── admin_panel/           # Browser-based admin UI (served at /admin)
     │   ├── base.html          # Root template — assembles all includes
     │   ├── components/        # Shared UI fragments (sidebar, header, login, toast, icons)
@@ -127,14 +128,19 @@ PraixisEngine/
     │   └── security.py        # API key auth (SHA-256 lookup) + admin Basic Auth
     └── utils/
         ├── ai_client.py       # OpenAI-compatible client factory
-        ├── memory.py          # Redis: sessions, API keys, usage tracking
-        ├── vector_db.py       # ChromaDB CRUD operations
-        ├── file_parser.py     # PDF / DOCX / TXT text extraction & chunking
         ├── concurrency.py     # Redis GPU slot counter, GPUBusyError
-        ├── audit.py           # Event log (Redis lists, newest-first pagination)
-        ├── limiter.py         # SlowAPI rate limiter
-        ├── load_env.py        # .env loader
-        └── logger.py
+        ├── store/             # Redis client + data stores
+        │   ├── client.py      # Shared async Redis client
+        │   ├── sessions.py    # Chat session history
+        │   ├── usage.py       # Per-app token usage counters
+        │   ├── api_keys.py    # API key storage (SHA-256 hashed)
+        │   └── audit.py       # Event log (Redis lists, newest-first pagination)
+        ├── system/            # Cross-cutting infrastructure
+        │   ├── logger.py
+        │   └── limiter.py     # SlowAPI rate limiter
+        └── documents/         # Document ingest + vector store
+            ├── file_parser.py # PDF / DOCX / TXT text extraction & chunking
+            └── vector_db.py   # ChromaDB CRUD operations
 ```
 
 ---
@@ -161,7 +167,7 @@ Response:
 ```json
 {
   "app_name": "my-app",
-  "api_key": "praxis_...",
+  "api_key": "praixis_...",
   "message": "Store this key safely. It will not be shown again."
 }
 ```
@@ -172,7 +178,7 @@ Include it in the `X-API-Key` header on every request:
 
 ```bash
 curl -X POST "http://localhost:8080/general-requests/chat" \
-  -H "X-API-Key: praxis_..." \
+  -H "X-API-Key: praixis_..." \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Hello!", "session_id": null}'
 ```
@@ -214,6 +220,16 @@ Multipart form upload. Fields:
 | `tone` | `"Professional and objective"` | Desired response tone |
 
 Returns `413 Request Entity Too Large` if the file exceeds 20 MB.
+
+---
+
+### Chat Session Management
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/general-requests/chat/sessions/active` | List active session IDs for your app |
+| `GET` | `/general-requests/chat/{session_id}` | Fetch the full message history for a session |
+| `DELETE` | `/general-requests/chat/{session_id}` | Delete a session and its history |
 
 ---
 
@@ -262,6 +278,7 @@ Returns per-file results:
 | `question` | required | The question to ask |
 | `session_id` | `null` | Existing session ID for follow-up questions with automatic query reformulation |
 | `n_results` | `5` | Number of context chunks to retrieve (1–20) |
+| `system_prompt` | `null` | Optional system prompt override; falls back to the built-in RAG instruction when omitted |
 | `metadata_filter` | `null` | Optional ChromaDB metadata filter dict |
 
 Returns a **streaming response**. The first three lines are metadata headers, followed by the answer tokens:
@@ -311,6 +328,7 @@ All admin endpoints require HTTP Basic Auth (`ADMIN_USERNAME` / `ADMIN_PASSWORD`
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/system/ping` | Liveness check — no auth required |
+| `GET` | `/api/system/auth/verify` | Validate admin credentials (used by the admin panel login); returns `{"ok": true}` |
 | `GET` | `/api/system/health` | Aggregate health of Redis, ChromaDB, and LLM backend |
 | `GET` | `/api/system/health/redis` | Redis health only |
 | `GET` | `/api/system/health/chromadb` | ChromaDB health only |
@@ -318,7 +336,7 @@ All admin endpoints require HTTP Basic Auth (`ADMIN_USERNAME` / `ADMIN_PASSWORD`
 | `GET` | `/api/system/stats` | Active sessions, collection count, total vector chunks |
 | `GET` | `/api/system/keys` | List all provisioned keys (preview + created_at) and their app names |
 | `POST` | `/api/system/keys/generate?app_name=` | Generate a new API key |
-| `DELETE` | `/api/system/keys/revoke-by-hash?hash=` | Revoke a key by its stored SHA-256 hash |
+| `DELETE` | `/api/system/keys/revoke-by-hash?key_hash=` | Revoke a key by its stored SHA-256 hash |
 | `DELETE` | `/api/system/sessions/{app_name}` | Force-wipe all active sessions for a specific app |
 | `GET` | `/api/system/usage` | Token usage totals across all apps |
 | `GET` | `/api/system/usage/{app_name}` | Token usage totals for a specific app |
@@ -342,13 +360,18 @@ All limits are per API key (falls back to IP for unauthenticated routes).
 |---|---|
 | `POST /general-requests/chat` | 10 / minute |
 | `POST /general-requests/file_summary` | 5 / minute |
+| `GET /general-requests/chat/sessions/active` | 60 / minute |
+| `GET /general-requests/chat/{session_id}` | 60 / minute |
+| `DELETE /general-requests/chat/{session_id}` | 30 / minute |
 | `POST /rag-db/upload` | 15 / minute |
 | `POST /rag-db/ask` | 30 / minute |
+| `POST /rag-db/embed` | 60 / minute |
+| `GET /rag-db/list` | 60 / minute |
+| `GET /rag-db/{collection}/files` | 60 / minute |
 | `GET /rag-db/knowledge_base/.../summary` | 10 / minute |
 | `POST /rag-db/knowledge_base/compare` | 5 / minute |
-| `GET /rag-db/list` | 60 / minute |
-| `GET`, `DELETE` collection/file endpoints | 60 / minute |
-| `POST /rag-db/embed` | 60 / minute |
+| `DELETE /rag-db/delete/{collection}` | 20 / minute |
+| `DELETE /rag-db/{collection}/files/{filename}` | 20 / minute |
 
 Exceeding a limit returns HTTP `429 Too Many Requests`.
 

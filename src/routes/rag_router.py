@@ -13,7 +13,7 @@ from src.controllers.rag_controller import (
     handle_delete_collection,
     handle_summarize_document,
 )
-from src.utils.limiter import limiter
+from src.utils.system.limiter import limiter
 
 router = APIRouter(
     prefix="/rag-db",
@@ -104,12 +104,15 @@ async def embed_endpoint(
 
 
 @router.get("/list")
-async def rag_list_endpoint(app_name: str = Depends(verify_api_key)):
+@limiter.limit("60/minute")
+async def rag_list_endpoint(request: Request, app_name: str = Depends(verify_api_key)):
     return await handle_list_collections(app_name=app_name)
 
 
 @router.get("/{collection_name}/files")
+@limiter.limit("60/minute")
 async def rag_list_files_endpoint(
+    request: Request,
     collection_name: str = Path(..., pattern=r"^[a-zA-Z0-9_-]{3,63}$"),
     app_name: str = Depends(verify_api_key)
 ):

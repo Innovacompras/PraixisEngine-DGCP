@@ -85,8 +85,8 @@ function adminApp() {
     // INIT
     // ══════════════════════════════════════════════════════════════════════════
     async init() {
-      const token = sessionStorage.getItem('praxis_admin_token');
-      const user  = sessionStorage.getItem('praxis_admin_user');
+      const token = sessionStorage.getItem('praixis_admin_token');
+      const user  = sessionStorage.getItem('praixis_admin_user');
       if (!token) { this.initializing = false; return; }
       this.authHeader = token;
       try {
@@ -105,15 +105,15 @@ function adminApp() {
     },
 
     clearSession() {
-      sessionStorage.removeItem('praxis_admin_token');
-      sessionStorage.removeItem('praxis_admin_user');
+      sessionStorage.removeItem('praixis_admin_token');
+      sessionStorage.removeItem('praixis_admin_user');
       this.authHeader = '';
     },
 
     // Returns true on success, 'auth' on 401/403, false on any other server error.
     // Throws on network failure.
     async _verifyAuth() {
-      const r = await fetch('/api/system/ping', {
+      const r = await fetch('/api/system/auth/verify', {
         headers: { Authorization: 'Basic ' + this.authHeader },
       });
       if (r.status === 401 || r.status === 403) return 'auth';
@@ -131,8 +131,8 @@ function adminApp() {
         const result    = await this._verifyAuth();
         if (result === true) {
           this.loggedInUser  = this.loginUsername;
-          sessionStorage.setItem('praxis_admin_token', this.authHeader);
-          sessionStorage.setItem('praxis_admin_user',  this.loginUsername);
+          sessionStorage.setItem('praixis_admin_token', this.authHeader);
+          sessionStorage.setItem('praixis_admin_user',  this.loginUsername);
           this.isLoggedIn    = true;
           this.loginPassword = '';
           this.startAutoRefresh();

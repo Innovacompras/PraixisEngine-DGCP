@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request, UploadFile, File, Form
 from src.dependencies.security import verify_api_key
 from src.models.schemas import ChatRequest
 from src.controllers.chat_controller import handle_chat, handle_clear_history, handle_fetch_history, handle_file_summary, handle_list_sessions
-from src.utils.limiter import limiter
+from src.utils.system.limiter import limiter
 
 router = APIRouter(
     prefix="/general-requests",
@@ -34,15 +34,18 @@ async def file_summary_endpoint(
 
 
 @router.get("/chat/sessions/active")
-async def list_active_sessions(app_name: str = Depends(verify_api_key)):
+@limiter.limit("60/minute")
+async def list_active_sessions(request: Request, app_name: str = Depends(verify_api_key)):
     return await handle_list_sessions(app_name=app_name)
 
 
 @router.get("/chat/{session_id}")
-async def fetch_chat_history(session_id: str, app_name: str = Depends(verify_api_key)):
+@limiter.limit("60/minute")
+async def fetch_chat_history(request: Request, session_id: str, app_name: str = Depends(verify_api_key)):
     return await handle_fetch_history(session_id, app_name=app_name)
 
 
 @router.delete("/chat/{session_id}")
-async def clear_chat_history(session_id: str, app_name: str = Depends(verify_api_key)):
+@limiter.limit("30/minute")
+async def clear_chat_history(request: Request, session_id: str, app_name: str = Depends(verify_api_key)):
     return await handle_clear_history(session_id, app_name=app_name)

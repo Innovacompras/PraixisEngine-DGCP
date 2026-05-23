@@ -1,12 +1,12 @@
-import os
 import secrets
 
 from fastapi import Depends, Security, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.security.api_key import APIKeyHeader
-from src.utils.memory import lookup_api_key
-from src.utils.audit import log_event
-from src.utils.logger import logger
+from src.config import ADMIN_USERNAME, ADMIN_PASSWORD
+from src.utils.store.api_keys import lookup_api_key
+from src.utils.store.audit import log_event
+from src.utils.system.logger import logger
 
 _API_KEY_NAME = "X-API-Key"
 _api_key_header = APIKeyHeader(name=_API_KEY_NAME, auto_error=False)
@@ -34,8 +34,8 @@ _security_basic = HTTPBasic()
 
 def verify_admin_credentials(credentials: HTTPBasicCredentials = Depends(_security_basic)):
     """Validates the master username and password from the .env file."""
-    correct_username = os.getenv("ADMIN_USERNAME")
-    correct_password = os.getenv("ADMIN_PASSWORD")
+    correct_username = ADMIN_USERNAME
+    correct_password = ADMIN_PASSWORD
 
     if not (correct_username and correct_password):
         logger.warning("Master Username and Password not found.")

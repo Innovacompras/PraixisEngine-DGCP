@@ -1,6 +1,6 @@
 import json
 import datetime
-from src.utils.memory import redis_client
+from src.utils.store.client import redis_client
 
 _MAX_EVENTS = 10_000
 _GLOBAL_KEY = "audit:global"
