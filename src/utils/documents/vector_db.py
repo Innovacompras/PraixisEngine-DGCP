@@ -136,17 +136,30 @@ async def query_rag_db(
         count = collection.count()
         if count == 0:
             return []
-        actual_n = min(n_results, count)
 
         where_clause: Dict[str, Any] | None = None
         if metadata_filter:
             where_clause = {"$and": [{"app": app_name}, metadata_filter]}
 
-        results = collection.query(
-            query_texts=[question],
-            n_results=actual_n,
-            where=where_clause,
-        )
+        # When a filter is active, cap n_results against the matching subset, not
+        # the total. Passing n_results > filtered_count causes a ChromaDB error.
+        if where_clause is not None:
+            filtered_ids = collection.get(where=where_clause, include=[]).get("ids") or []
+            actual_n = min(n_results, len(filtered_ids))
+            if actual_n == 0:
+                return []
+        else:
+            actual_n = min(n_results, count)
+
+        query_kwargs: Dict[str, Any] = {
+            "query_texts": [question],
+            "n_results": actual_n,
+            "include": ["documents", "metadatas"],
+        }
+        if where_clause is not None:
+            query_kwargs["where"] = where_clause
+
+        results = collection.query(**query_kwargs)
 
         retrieved: List[Dict[str, str]] = []
         docs = results.get("documents")
