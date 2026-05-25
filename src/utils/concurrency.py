@@ -24,11 +24,13 @@ async def _acquire() -> None:
 async def gpu_slot():
     """Blocks until a slot is free (up to GPU_WAIT_TIMEOUT seconds), then holds it for the duration."""
     await _acquire()
-    await redis_client.incr(_GPU_KEY)
     try:
-        yield
+        await redis_client.incr(_GPU_KEY)
+        try:
+            yield
+        finally:
+            await redis_client.decr(_GPU_KEY)
     finally:
-        await redis_client.decr(_GPU_KEY)
         _semaphore.release()
 
 
@@ -43,7 +45,7 @@ async def acquire_gpu_slot() -> None:
 
 async def release_gpu_slot() -> None:
     """Releases a slot previously acquired with acquire_gpu_slot()."""
-    _semaphore.release()
+    _semaphore.release()  # sync — release before any await so it can't be lost
     await redis_client.decr(_GPU_KEY)
 
 

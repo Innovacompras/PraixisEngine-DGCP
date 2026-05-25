@@ -50,9 +50,17 @@ async def stream_llm(messages: list[Message], app_name: str) -> AsyncGenerator[s
 
 async def map_calls(messages_list: list[list[Message]], app_name: str) -> list[str]:
     """Runs many non-streaming calls concurrently, bounded by CHUNK_CONCURRENCY.
-    Results preserve input order."""
+    Results preserve input order. On any failure, remaining tasks are cancelled so
+    they release their GPU slots rather than running as orphaned background work."""
     async def _run(messages: list[Message]) -> str:
         async with _chunk_sem:
             return await call_llm(messages, app_name)
 
-    return list(await asyncio.gather(*[_run(m) for m in messages_list]))
+    tasks = [asyncio.create_task(_run(m)) for m in messages_list]
+    try:
+        return list(await asyncio.gather(*tasks))
+    except BaseException:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
