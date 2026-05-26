@@ -44,6 +44,7 @@ CHUNK_CONCURRENCY: int = int(os.getenv("CHUNK_CONCURRENCY", "4"))
 
 # --- Vector store ---
 CHROMA_PATH: str = os.getenv("CHROMA_PATH", os.path.join(_ROOT, "chroma_data"))
+EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
 # --- Admin auth (no defaults — must be set in the environment) ---
 ADMIN_USERNAME: str | None = os.getenv("ADMIN_USERNAME")

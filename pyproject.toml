@@ -3,7 +3,7 @@ name = "praixisengine"
 version = "0.1.0"
 description = "Multi-tenant AI backend API providing decoupled business logic (chat, RAG, file processing) over an OpenAI-compatible LLM."
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "chromadb>=1.5.7",
     "python-dotenv>=1.0.0",
@@ -18,4 +18,5 @@ dependencies = [
     "jinja2>=3.1.0",
     "slowapi>=0.1.9",
     "uvicorn>=0.44.0",
+    "fastembed>=0.4.0",
 ]

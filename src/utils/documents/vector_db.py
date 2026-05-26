@@ -3,12 +3,35 @@ import chromadb
 import uuid
 from typing import List, Dict, Any, Set
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+from chromadb.utils.embedding_functions import EmbeddingFunction
+from chromadb.api.types import Documents, Embeddings
+from fastembed import TextEmbedding
 
-from src.config import CHROMA_PATH as _CHROMA_PATH
+from src.config import CHROMA_PATH as _CHROMA_PATH, EMBEDDING_MODEL as _EMBEDDING_MODEL
 chroma_client = chromadb.PersistentClient(path=_CHROMA_PATH)
 
-_embedding_fn = DefaultEmbeddingFunction()
+
+class _FastEmbedFn(EmbeddingFunction[Documents]):  # type: ignore[misc]
+    def __init__(self, model_name: str) -> None:
+        self._model_name = model_name
+        self._embedder = TextEmbedding(model_name=model_name)
+
+    def __call__(self, input: Documents) -> Embeddings:  # type: ignore[override]
+        return [emb.tolist() for emb in self._embedder.embed(input)]
+
+    @staticmethod
+    def name() -> str:
+        return "fastembed"
+
+    def get_config(self) -> dict:
+        return {"model_name": self._model_name}
+
+    @staticmethod
+    def build_from_config(config: dict) -> "_FastEmbedFn":
+        return _FastEmbedFn(model_name=config["model_name"])
+
+
+_embedding_fn = _FastEmbedFn(model_name=_EMBEDDING_MODEL)
 
 
 def _scoped_name(app_name: str, collection_name: str) -> str:
@@ -28,7 +51,7 @@ async def list_all_collections(app_name: str) -> List[str]:
 async def list_files_in_collection(collection_name: str, app_name: str) -> List[str]:
     def _run():
         try:
-            collection = chroma_client.get_collection(name=_scoped_name(app_name, collection_name))
+            collection = chroma_client.get_collection(name=_scoped_name(app_name, collection_name), embedding_function=_embedding_fn)
         except Exception:
             raise ValueError(f"The collection '{collection_name}' does not exist.")
         if not collection.metadata or collection.metadata.get("app") != app_name:
@@ -49,7 +72,7 @@ async def delete_collection(collection_name: str, app_name: str) -> bool:
     def _run():
         try:
             scoped = _scoped_name(app_name, collection_name)
-            collection = chroma_client.get_collection(name=scoped)
+            collection = chroma_client.get_collection(name=scoped, embedding_function=_embedding_fn)
             if not collection.metadata or collection.metadata.get("app") != app_name:
                 raise ValueError("Access denied: You do not own this collection.")
             chroma_client.delete_collection(name=scoped)
@@ -63,7 +86,7 @@ async def delete_collection(collection_name: str, app_name: str) -> bool:
 async def delete_file_from_collection(collection_name: str, filename: str, app_name: str) -> bool:
     def _run():
         try:
-            collection = chroma_client.get_collection(name=_scoped_name(app_name, collection_name))
+            collection = chroma_client.get_collection(name=_scoped_name(app_name, collection_name), embedding_function=_embedding_fn)
         except Exception:
             raise ValueError(f"The collection '{collection_name}' does not exist.")
         if not collection.metadata or collection.metadata.get("app") != app_name:
@@ -88,7 +111,8 @@ async def add_file_to_rag_db(
     def _run():
         collection = chroma_client.get_or_create_collection(
             name=_scoped_name(app_name, collection_name),
-            metadata={"app": app_name}
+            metadata={"app": app_name},
+            embedding_function=_embedding_fn,
         )
         if not collection.metadata or collection.metadata.get("app") != app_name:
             raise ValueError("Access denied: You do not own this collection.")
@@ -129,7 +153,7 @@ async def query_rag_db(
     metadata_filter: Dict[str, Any] | None = None,
 ) -> List[Dict[str, str]]:
     def _run():
-        collection = chroma_client.get_collection(name=_scoped_name(app_name, collection_name))
+        collection = chroma_client.get_collection(name=_scoped_name(app_name, collection_name), embedding_function=_embedding_fn)
         if not collection.metadata or collection.metadata.get("app") != app_name:
             raise ValueError("Access denied: You do not own this collection.")
 
@@ -182,7 +206,7 @@ async def search_collection(
 ) -> List[Dict[str, Any]]:
     def _run():
         try:
-            collection = chroma_client.get_collection(name=_scoped_name(app_name, collection_name))
+            collection = chroma_client.get_collection(name=_scoped_name(app_name, collection_name), embedding_function=_embedding_fn)
         except Exception:
             raise ValueError(f"Collection '{collection_name}' does not exist.")
         if not collection.metadata or collection.metadata.get("app") != app_name:
@@ -216,7 +240,7 @@ async def search_collection(
 async def get_full_document_text(collection_name: str, app_name: str, filename: str) -> str:
     def _run():
         try:
-            collection = chroma_client.get_collection(name=_scoped_name(app_name, collection_name))
+            collection = chroma_client.get_collection(name=_scoped_name(app_name, collection_name), embedding_function=_embedding_fn)
         except Exception:
             raise ValueError(f"Collection '{collection_name}' does not exist.")
         if not collection.metadata or collection.metadata.get("app") != app_name:
