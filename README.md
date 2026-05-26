@@ -20,7 +20,7 @@ A multi-tenant AI backend API that provides decoupled business logic for LLM-pow
 - **Usage Tracking** — Per-app prompt/completion token counters in Redis, exposed via admin endpoints
 - **Async I/O** — Fully async stack: `redis.asyncio`, `AsyncOpenAI`, ChromaDB calls offloaded via `asyncio.to_thread`
 - **Structured Output** — Optional `response_format: "json"` field on chat requests for machine-readable responses
-- **Embeddings** — Direct embedding endpoint returns the raw vector for any text input
+- **Embeddings** — Direct embedding endpoint returns the raw vector for any text input using the same multilingual model (`paraphrase-multilingual-MiniLM-L12-v2`) the RAG pipeline uses internally; model is configurable via `EMBEDDING_MODEL`
 
 ---
 
@@ -279,7 +279,7 @@ Returns per-file results:
 | `session_id` | `null` | Existing session ID for follow-up questions with automatic query reformulation |
 | `n_results` | `5` | Number of context chunks to retrieve (1–20) |
 | `system_prompt` | `null` | Optional system prompt override; falls back to the built-in RAG instruction when omitted |
-| `metadata_filter` | `null` | Optional ChromaDB metadata filter dict |
+| `metadata_filter` | `null` | Optional metadata filter dict (e.g. `{"source": "file.pdf"}`) |
 
 Returns a **streaming response**. The first three lines are metadata headers, followed by the answer tokens:
 
@@ -294,7 +294,7 @@ The answer begins streaming here...
 
 ### Embed — `POST /rag-db/embed`
 
-Returns the raw embedding vector for a text input using the same model the RAG pipeline uses internally (384 dimensions). Does **not** call the LLM.
+Returns the raw embedding vector for a text input using the same model the RAG pipeline uses internally (`paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensions). Does **not** call the LLM.
 
 ```json
 { "text": "What is the refund policy?" }
