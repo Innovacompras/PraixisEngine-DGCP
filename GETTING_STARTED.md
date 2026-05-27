@@ -77,6 +77,8 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 
 Make sure Docker is running. The project includes a `Makefile` with two modes. `make` is built-in on macOS/Linux. On Windows, install it via [Chocolatey](https://chocolatey.org/) (`choco install make`) or use the manual commands shown below instead.
 
+In both modes the API initializes the database schema on startup (creates the `vector` and `unaccent` extensions and the `chunks` table if they don't exist), so a fresh Postgres just works.
+
 ### Local stack — app + PostgreSQL + Redis in Docker
 
 Use this when you want everything self-contained on one machine. Docker boots the app, a PostgreSQL/pgvector container, and a Redis container, wires them together, and persists data in named volumes.
@@ -85,21 +87,22 @@ Use this when you want everything self-contained on one machine. Docker boots th
 make up-local
 ```
 
-You do not need `REDIS_URL` or `POSTGRES_URL` in `.env` for this mode — Docker overrides both automatically to point at the bundled containers.
+`REDIS_URL` and `POSTGRES_URL` are auto-overridden to point at the bundled containers, so you can leave them unset in `.env` for this mode. Local Postgres credentials are hardcoded to `praixis/praixis` and Postgres/Redis are exposed on the host at `5432`/`6379` for local debugging.
 
-### Distributed / production — app + PostgreSQL
+### App-only — bring your own Redis + Postgres
 
-Use this when Redis (and/or the LLM) lives on a separate server. Docker boots the app and a PostgreSQL/pgvector container; reads `REDIS_URL` directly from your `.env`.
+Use this when Redis and Postgres live elsewhere (managed services, separate servers, an existing cluster). Docker boots **only** the API container; you are responsible for providing reachable instances.
 
 ```bash
 make up
 ```
 
-Make sure your `.env` has the correct remote URLs before running:
+Make sure your `.env` has the correct URLs before running. Postgres must have the `pgvector` extension available — the `pgvector/pgvector` image works out of the box:
 
 ```env
 AI_API_URL=http://<llm-server-ip>:8081
 REDIS_URL=redis://:password@<redis-server-ip>:6379/0
+POSTGRES_URL=postgresql://<user>:<password>@<postgres-host>:5432/<db>
 ```
 
 ### Tear down
@@ -112,10 +115,10 @@ make down-local  # matches make up-local
 ### Manual commands (without make)
 
 ```bash
-# Local stack
+# Local stack (API + Postgres + Redis)
 docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 
-# App only
+# App only (you provide REDIS_URL + POSTGRES_URL in .env)
 docker compose up --build
 ```
 
