@@ -5,10 +5,6 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Install dependencies first — this layer is cached and only rebuilt when
@@ -17,8 +13,11 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev && rm -rf /root/.cache/uv
 
 # Pre-download the fastembed model so the first request is not slow.
-# Kept in the dependency layer so it is cached across source-only changes.
-RUN uv run python -c "from fastembed import TextEmbedding; list(TextEmbedding(model_name='sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2').embed(['warmup']))"
+# Override at build time with --build-arg EMBEDDING_MODEL=... to match your
+# runtime EMBEDDING_MODEL; otherwise the model downloads on first request.
+ARG EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}
+RUN uv run python -c "import os; from fastembed import TextEmbedding; list(TextEmbedding(model_name=os.environ['EMBEDDING_MODEL']).embed(['warmup']))"
 
 # Copy the application source last so edits don't invalidate the layers above.
 COPY . .

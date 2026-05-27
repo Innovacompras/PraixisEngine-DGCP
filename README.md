@@ -444,7 +444,7 @@ Alpine.js (3.14.3) and Tailwind CSS are vendored locally — the admin panel mak
 All data is scoped to the `app_name` resolved from the API key:
 
 - **Redis sessions** are stored as `chat:{app_name}:{session_id}`
-- **Vector collections** are rows in the `chunks` table scoped by `(app, collection)` composite columns — two apps using the same collection name get completely separate data with no overlap. Access checks enforce the `app` column, returning `403` on any mismatch
+- **Vector collections** are rows in the `chunks` table scoped by `(app, collection)` composite columns — two apps using the same collection name get completely separate data with no overlap. Every query filters by `app`, so cross-tenant access returns `404` (collection not found) and never leaks existence of another app's data
 - **Usage counters** are stored as `usage:{app_name}:*`
 - **Audit logs** are stored under `audit:{app_name}` in addition to the global `audit:global` list
 - **Admin operations** are separate and not scoped to any app

@@ -147,9 +147,12 @@ function _adminVector() {
       }
     },
 
+    // RRF score = 1/(60+rank_sem) + 1/(60+rank_fts). Max ≈ 2/61 ≈ 0.0328 when a
+    // chunk ranks #1 in both. ~0.0164 when it tops only one source. Thresholds
+    // are calibrated against those endpoints, not cosine similarity.
     scoreColor(score) {
-      if (score >= 0.7) return 'bg-green-400/15 text-green-400 ring-green-500/20';
-      if (score >= 0.4) return 'bg-amber-400/15 text-amber-400 ring-amber-500/20';
+      if (score >= 0.025) return 'bg-green-400/15 text-green-400 ring-green-500/20';
+      if (score >= 0.012) return 'bg-amber-400/15 text-amber-400 ring-amber-500/20';
       return 'bg-red-400/15 text-red-400 ring-red-500/20';
     },
 

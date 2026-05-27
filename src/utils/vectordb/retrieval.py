@@ -2,8 +2,8 @@ import asyncio
 import re
 from typing import Any
 
-from src.utils.vectordb.pool import _get_pool
-from src.utils.vectordb.embeddings import _embed
+from src.utils.vectordb.pool import get_pool
+from src.utils.vectordb.embeddings import embed
 from src.utils.vectordb.constants import COLLECTION_EXISTS, FULL_DOCUMENT, HYBRID_SEARCH, WINDOW_CHUNKS
 
 
@@ -62,7 +62,7 @@ def _merge_windows(chunk_indices: list[int]) -> list[tuple[int, int]]:
 
 
 async def _fetch_range(app: str, collection: str, source: str, lo: int, hi: int) -> str:
-    rows = await _get_pool().fetch(WINDOW_CHUNKS, app, collection, source, lo, hi)
+    rows = await get_pool().fetch(WINDOW_CHUNKS, app, collection, source, lo, hi)
     return "\n\n".join(r["content"] for r in rows)
 
 
@@ -73,8 +73,8 @@ async def query_rag_db(
     n_results: int = 5,
     metadata_filter: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
-    embedding = await asyncio.to_thread(_embed, [question])
-    rows = await _get_pool().fetch(
+    embedding = await asyncio.to_thread(embed, [question])
+    rows = await get_pool().fetch(
         HYBRID_SEARCH,
         embedding[0], app_name, collection_name,
         max(n_results * 2, 10), _fts_query(question),
@@ -104,12 +104,12 @@ async def search_collection(
     query: str,
     n_results: int = 5,
 ) -> list[dict[str, Any]]:
-    exists = await _get_pool().fetchval(COLLECTION_EXISTS, app_name, collection_name)
+    exists = await get_pool().fetchval(COLLECTION_EXISTS, app_name, collection_name)
     if not exists:
         raise ValueError(f"Collection '{collection_name}' does not exist.")
 
-    embedding = await asyncio.to_thread(_embed, [query])
-    rows = await _get_pool().fetch(
+    embedding = await asyncio.to_thread(embed, [query])
+    rows = await get_pool().fetch(
         HYBRID_SEARCH,
         embedding[0], app_name, collection_name,
         max(n_results * 3, 15), _fts_query(query), None, n_results,
@@ -121,7 +121,7 @@ async def search_collection(
 
 
 async def get_full_document_text(collection_name: str, app_name: str, filename: str) -> str:
-    rows = await _get_pool().fetch(FULL_DOCUMENT, app_name, collection_name, filename)
+    rows = await get_pool().fetch(FULL_DOCUMENT, app_name, collection_name, filename)
     if not rows:
         raise ValueError(f"No chunks found for document '{filename}' in this collection.")
     return "\n\n".join(r["content"] for r in rows)
