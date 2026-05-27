@@ -18,7 +18,7 @@ A multi-tenant AI backend API that provides decoupled business logic for LLM-pow
 - **Rate Limiting** — Per-API-key, per-endpoint request limits to protect GPU resources (falls back to IP for unauthenticated routes)
 - **Redis-backed GPU Concurrency** — Atomic slot counter shared across all workers; blocks up to `GPU_WAIT_TIMEOUT` seconds (default 30 s) waiting for a free slot, then returns `503`. Resets automatically on startup
 - **Usage Tracking** — Per-app prompt/completion token counters in Redis, exposed via admin endpoints
-- **Async I/O** — Fully async stack: `redis.asyncio`, `AsyncOpenAI`, ChromaDB calls offloaded via `asyncio.to_thread`
+- **Async I/O** — Fully async stack: `redis.asyncio`, `AsyncOpenAI`, `asyncpg` for PostgreSQL/pgvector
 - **Structured Output** — Optional `response_format: "json"` field on chat requests for machine-readable responses
 - **Embeddings** — Direct embedding endpoint returns the raw vector for any text input using the same multilingual model (`paraphrase-multilingual-MiniLM-L12-v2`) the RAG pipeline uses internally; model is configurable via `EMBEDDING_MODEL`
 
@@ -50,7 +50,7 @@ Client App (with X-API-Key)
   |           Utilities                 |
   |  ai_client.py    (OpenAI-compatible)|  <- LLM backend connection
   |  store/          (Redis)            |  <- Client, sessions, usage, keys, audit
-  |  documents/      (ChromaDB)         |  <- Vector store + file extraction
+  |  vectordb/       (pgvector)           |  <- Vector store + embeddings
   |  concurrency.py                     |  <- Redis GPU slot counter
   |  system/                            |  <- logger, limiter, .env loader
   └────────────────────────────────────┘
@@ -66,10 +66,10 @@ Client App (with X-API-Key)
 
 ### Request Flow — RAG Q&A
 
-1. Client uploads a file via `POST /rag-db/upload` → text is extracted and chunked into ChromaDB under a scoped collection (`{app_name}_{collection_name}`)
+1. Client uploads a file via `POST /rag-db/upload` → text is extracted and stored in pgvector, scoped by `(app, collection)` columns in the `chunks` table
 2. Client sends `POST /rag-db/ask` with a question, `collection_name`, and optional `n_results`
 3. If a prior session exists, the question is **reformulated** into a standalone query using chat history
-4. Top-N relevant chunks are retrieved from ChromaDB and injected as context
+4. Top-N relevant chunks are retrieved from pgvector and injected as context
 5. Response is streamed back: metadata headers (`SESSION_ID`, `SEARCH_QUERY`, `SOURCES`) first, then answer tokens; full answer is saved to the session
 
 ### Large Document Pipeline (Map-Reduce)
@@ -92,7 +92,7 @@ PraixisEngine/
 ├── main.py                    # App entry point, FastAPI setup, lifespan, rate limit handler
 ├── Makefile                   # Docker shortcuts (up, up-local, down, down-local)
 ├── Dockerfile
-├── docker-compose.yml         # Base: app only — use with external Redis/LLM
+├── docker-compose.yml         # Base: app + PostgreSQL — use with external Redis/LLM
 ├── docker-compose.local.yml   # Overlay: adds Redis container for local dev
 ├── tailwind.config.js         # Tailwind build config (brand colors, content paths)
 ├── pyproject.toml
@@ -135,12 +135,17 @@ PraixisEngine/
         │   ├── usage.py       # Per-app token usage counters
         │   ├── api_keys.py    # API key storage (SHA-256 hashed)
         │   └── audit.py       # Event log (Redis lists, newest-first pagination)
+        ├── file_parser.py     # PDF / DOCX / TXT text extraction & chunking
         ├── system/            # Cross-cutting infrastructure
         │   ├── logger.py
         │   └── limiter.py     # SlowAPI rate limiter
-        └── documents/         # Document ingest + vector store
-            ├── file_parser.py # PDF / DOCX / TXT text extraction & chunking
-            └── vector_db.py   # ChromaDB CRUD operations
+        └── vectordb/          # pgvector connection, ingest, and retrieval
+            ├── constants.py   # All SQL query strings
+            ├── pool.py        # asyncpg connection pool lifecycle
+            ├── embeddings.py  # fastembed text embedding
+            ├── collections.py # Collection & file management
+            ├── ingestion.py   # Chunk & index documents
+            └── retrieval.py   # Hybrid semantic + FTS search
 ```
 
 ---
@@ -329,9 +334,9 @@ All admin endpoints require HTTP Basic Auth (`ADMIN_USERNAME` / `ADMIN_PASSWORD`
 |---|---|---|
 | `GET` | `/api/system/ping` | Liveness check — no auth required |
 | `GET` | `/api/system/auth/verify` | Validate admin credentials (used by the admin panel login); returns `{"ok": true}` |
-| `GET` | `/api/system/health` | Aggregate health of Redis, ChromaDB, and LLM backend |
+| `GET` | `/api/system/health` | Aggregate health of Redis, vector store, and LLM backend |
 | `GET` | `/api/system/health/redis` | Redis health only |
-| `GET` | `/api/system/health/chromadb` | ChromaDB health only |
+| `GET` | `/api/system/health/vectordb` | pgvector health only |
 | `GET` | `/api/system/health/llm` | LLM backend health only |
 | `GET` | `/api/system/stats` | Active sessions, collection count, total vector chunks |
 | `GET` | `/api/system/keys` | List all provisioned keys (preview + created_at) and their app names |
@@ -439,7 +444,7 @@ Alpine.js (3.14.3) and Tailwind CSS are vendored locally — the admin panel mak
 All data is scoped to the `app_name` resolved from the API key:
 
 - **Redis sessions** are stored as `chat:{app_name}:{session_id}`
-- **ChromaDB collections** are stored as `{app_name}_{collection_name}` — two apps using the same collection name get completely separate ChromaDB collections with no overlap. Access checks also verify the `app` metadata tag, returning `403` on any mismatch
+- **Vector collections** are rows in the `chunks` table scoped by `(app, collection)` composite columns — two apps using the same collection name get completely separate data with no overlap. Access checks enforce the `app` column, returning `403` on any mismatch
 - **Usage counters** are stored as `usage:{app_name}:*`
 - **Audit logs** are stored under `audit:{app_name}` in addition to the global `audit:global` list
 - **Admin operations** are separate and not scoped to any app

@@ -14,8 +14,11 @@ from src.routes.main_router import api_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from src.utils.concurrency import reset_gpu_counter
+    from src.utils.vectordb.pool import init_db, close_db
     await reset_gpu_counter()
+    await init_db()
     yield
+    await close_db()
 
 
 app = FastAPI(

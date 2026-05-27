@@ -30,7 +30,7 @@ function adminApp() {
     loading: { dashboard: false, keys: false, usage: false, audit: false, vector: false },
 
     // ── Data stores ────────────────────────────────────────────────────────────
-    health: { api: 'online', redis: null, chromadb: null, llm: null },
+    health: { api: 'online', redis: null, vectordb: null, llm: null },
     stats:  {},
     gpu:    {},
     keys:   [],

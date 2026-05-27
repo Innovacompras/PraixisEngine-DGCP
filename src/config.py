@@ -43,8 +43,9 @@ GPU_WAIT_TIMEOUT: float = float(os.getenv("GPU_WAIT_TIMEOUT", "30"))
 CHUNK_CONCURRENCY: int = int(os.getenv("CHUNK_CONCURRENCY", "4"))
 
 # --- Vector store ---
-CHROMA_PATH: str = os.getenv("CHROMA_PATH", os.path.join(_ROOT, "chroma_data"))
+POSTGRES_URL: str = os.getenv("POSTGRES_URL", "postgresql://praixis:praixis@localhost:5432/praixis")
 EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+EMBEDDING_DIMS: int = int(os.getenv("EMBEDDING_DIMS", "384"))
 
 # --- Admin auth (no defaults — must be set in the environment) ---
 ADMIN_USERNAME: str | None = os.getenv("ADMIN_USERNAME")

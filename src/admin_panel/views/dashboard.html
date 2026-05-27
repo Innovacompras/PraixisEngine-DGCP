@@ -29,13 +29,13 @@
           <span class="text-[9px] font-mono text-cyan-900">POLL:30s</span>
         </div>
         <div class="space-y-1.5">
-          <template x-for="svc in ['api', 'redis', 'chromadb', 'llm']">
+          <template x-for="svc in ['api', 'redis', 'vectordb', 'llm']">
             <div class="flex items-center justify-between px-3 py-2.5 bg-black/30 border border-cyan-500/5">
               <div class="flex items-center gap-2.5">
                 <span class="w-1.5 h-1.5 rounded-full shrink-0 transition-all duration-300"
                       :class="statusDotColor(health[svc])"></span>
                 <span class="text-xs font-mono text-slate-500"
-                      x-text="{ api: 'API.GATEWAY', redis: 'REDIS.CACHE', chromadb: 'VECTOR.STORE', llm: 'LLM.BACKEND' }[svc]">
+                      x-text="{ api: 'API.GATEWAY', redis: 'REDIS.CACHE', vectordb: 'VECTOR.STORE', llm: 'LLM.BACKEND' }[svc]">
                 </span>
               </div>
               <span class="text-[10px] font-mono font-bold uppercase tracking-wider"

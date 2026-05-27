@@ -5,13 +5,15 @@ from src.utils.store.client import redis_client
 from src.utils.store.sessions import delete_all_app_sessions
 from src.utils.store.usage import get_usage, get_all_app_names
 from src.utils.store.api_keys import store_api_key, remove_api_key_by_hash, list_all_api_keys
-from src.utils.documents.vector_db import (
-    chroma_client,
+from src.utils.vectordb.pool import ping as _vector_ping
+from src.utils.vectordb.collections import (
+    get_all_collections_admin as _get_all_collections_admin,
+    get_vector_stats as _get_vector_stats,
     list_files_in_collection as _list_collection_files,
     delete_collection as _delete_collection,
     delete_file_from_collection as _delete_file,
-    search_collection as _search_collection,
 )
+from src.utils.vectordb.retrieval import search_collection as _search_collection
 from src.utils.ai_client import get_ai_client
 from src.utils.concurrency import get_gpu_status, reset_gpu_counter
 from src.utils.store.audit import log_event, get_audit_log
@@ -30,12 +32,12 @@ async def get_redis_health() -> dict:
         return {"status": "offline"}
 
 
-async def get_chromadb_health() -> dict:
+async def get_vectordb_health() -> dict:
     try:
-        await asyncio.to_thread(chroma_client.list_collections)
+        await _vector_ping()
         return {"status": "online"}
     except Exception:
-        logger.error("ChromaDB health check failed.")
+        logger.error("Vector DB health check failed.")
         return {"status": "offline"}
 
 
@@ -49,10 +51,10 @@ async def get_llm_health() -> dict:
 
 
 async def get_health_status() -> dict:
-    redis_s, chroma_s, llm_s = await asyncio.gather(
-        get_redis_health(), get_chromadb_health(), get_llm_health()
+    redis_s, vectordb_s, llm_s = await asyncio.gather(
+        get_redis_health(), get_vectordb_health(), get_llm_health()
     )
-    return {"api": "online", "redis": redis_s["status"], "chromadb": chroma_s["status"], "llm": llm_s["status"]}
+    return {"api": "online", "redis": redis_s["status"], "vectordb": vectordb_s["status"], "llm": llm_s["status"]}
 
 
 async def get_system_stats() -> dict:
@@ -62,15 +64,10 @@ async def get_system_stats() -> dict:
             count += 1
         return count
 
-    def _count_vectors():
-        cols = chroma_client.list_collections()
-        return len(cols), sum(col.count() for col in cols)
-
     active_sessions, (num_collections, total_vectors) = await asyncio.gather(
         _count_sessions(),
-        asyncio.to_thread(_count_vectors),
+        _get_vector_stats(),
     )
-
     return {
         "active_chat_sessions": active_sessions,
         "total_vector_collections": num_collections,
@@ -142,20 +139,7 @@ async def get_app_audit(app_name: str, limit: int = 100, offset: int = 0) -> dic
 # ── Vector DB admin ───────────────────────────────────────────────────────────
 
 async def admin_list_all_collections() -> dict:
-    def _run():
-        cols = chroma_client.list_collections()
-        result = []
-        for col in cols:
-            app_name = col.metadata.get("app", "unknown") if col.metadata else "unknown"
-            display_name = col.name[len(app_name) + 1:] if col.name.startswith(f"{app_name}_") else col.name
-            result.append({
-                "app_name": app_name,
-                "collection_name": display_name,
-                "chunk_count": col.count(),
-            })
-        return sorted(result, key=lambda x: (x["app_name"], x["collection_name"]))
-
-    collections = await asyncio.to_thread(_run)
+    collections = await _get_all_collections_admin()
     total_chunks = sum(c["chunk_count"] for c in collections)
     return {"total_collections": len(collections), "total_chunks": total_chunks, "collections": collections}
 

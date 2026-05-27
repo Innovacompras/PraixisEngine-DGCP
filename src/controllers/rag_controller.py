@@ -1,20 +1,18 @@
 import asyncio
-from typing import List
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from src.models.schemas import EmbedRequest, QuestionRequest
 from src.services.rag_service import generate_comparison, generate_rag_answer, generate_summary, reformulate_query
-from src.utils.documents.file_parser import extract_text_from_file, MAX_FILE_SIZE
-from src.utils.documents.vector_db import (
-    delete_file_from_collection,
-    get_embedding,
+from src.utils.file_parser import extract_text_from_file, MAX_FILE_SIZE
+from src.utils.vectordb.embeddings import get_embedding
+from src.utils.vectordb.ingestion import add_file_to_rag_db
+from src.utils.vectordb.collections import (
     list_all_collections,
-    delete_collection,
-    add_file_to_rag_db,
     list_files_in_collection,
-    query_rag_db,
-    get_full_document_text,
+    delete_collection,
+    delete_file_from_collection,
 )
+from src.utils.vectordb.retrieval import query_rag_db, get_full_document_text
 from src.utils.store.sessions import get_session_history
 from src.utils.system.logger import logger
 from src.utils.concurrency import GPUBusyError, acquire_gpu_slot, release_gpu_slot
@@ -69,7 +67,7 @@ async def handle_delete_file(collection_name: str, filename: str, app_name: str)
 
 async def handle_rag_upload(
     collection_name: str,
-    files: List[UploadFile],
+    files: list[UploadFile],
     app_name: str,
     chunk_size: int = 1000,
     chunk_overlap: int = 150,

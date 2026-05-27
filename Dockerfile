@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
@@ -16,9 +16,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev && rm -rf /root/.cache/uv
 
-# Pre-download the ChromaDB default embedding model so the first request is not
-# slow. Kept in the dependency layer so it is cached across source-only changes.
-RUN uv run python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFunction; DefaultEmbeddingFunction()(['warmup'])"
+# Pre-download the fastembed model so the first request is not slow.
+# Kept in the dependency layer so it is cached across source-only changes.
+RUN uv run python -c "from fastembed import TextEmbedding; list(TextEmbedding(model_name='sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2').embed(['warmup']))"
 
 # Copy the application source last so edits don't invalidate the layers above.
 COPY . .

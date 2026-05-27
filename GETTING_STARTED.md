@@ -2,9 +2,10 @@
 
 ## Prerequisites
 
-- Python 3.14+
+- Python 3.13+
 - [uv](https://github.com/astral-sh/uv) — package manager
 - A running Redis instance (local, [Upstash](https://upstash.com/), or dedicated server)
+- PostgreSQL with the [pgvector](https://github.com/pgvector/pgvector) extension (or use the bundled Docker Postgres service)
 - An OpenAI-compatible LLM server ([Ollama](https://ollama.com/), LiteLLM, LM Studio, vLLM, etc.)
 
 ---
@@ -45,8 +46,8 @@ REDIS_URL=redis://localhost:6379/0
 SESSION_TTL=86400       # seconds — default 24 hours
 MAX_HISTORY_PAIRS=20    # user+assistant turns kept before oldest are trimmed
 
-# ChromaDB — optional, defaults to ./chroma_data
-# CHROMA_PATH=./chroma_data
+# PostgreSQL (pgvector)
+POSTGRES_URL=postgresql://praixis:yourpassword@localhost:5432/praixis
 
 # Admin panel credentials
 ADMIN_USERNAME=your_admin_username
@@ -76,19 +77,19 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 
 Make sure Docker is running. The project includes a `Makefile` with two modes. `make` is built-in on macOS/Linux. On Windows, install it via [Chocolatey](https://chocolatey.org/) (`choco install make`) or use the manual commands shown below instead.
 
-### Local stack — app + Redis in Docker
+### Local stack — app + PostgreSQL + Redis in Docker
 
-Use this when you want everything self-contained on one machine. Docker boots both the app and a Redis container, wires them together, and persists data in named volumes.
+Use this when you want everything self-contained on one machine. Docker boots the app, a PostgreSQL/pgvector container, and a Redis container, wires them together, and persists data in named volumes.
 
 ```bash
 make up-local
 ```
 
-You do not need `REDIS_URL` in `.env` for this mode — Docker overrides it automatically to point at the Redis container.
+You do not need `REDIS_URL` or `POSTGRES_URL` in `.env` for this mode — Docker overrides both automatically to point at the bundled containers.
 
-### Distributed / production — app only
+### Distributed / production — app + PostgreSQL
 
-Use this when Redis (and/or the LLM) lives on a separate server. Docker boots only the app and reads `REDIS_URL` directly from your `.env`.
+Use this when Redis (and/or the LLM) lives on a separate server. Docker boots the app and a PostgreSQL/pgvector container; reads `REDIS_URL` directly from your `.env`.
 
 ```bash
 make up

@@ -1,7 +1,7 @@
 from src.models.schemas import ChatRequest
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from src.utils.documents.file_parser import extract_text_from_file, MAX_FILE_SIZE
+from src.utils.file_parser import extract_text_from_file, MAX_FILE_SIZE
 from src.services.chat_service import generate_chat_stream, generate_file_summary
 from src.utils.store.sessions import delete_session, get_all_active_sessions, get_session_history
 from src.utils.system.logger import logger

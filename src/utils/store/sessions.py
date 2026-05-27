@@ -1,7 +1,6 @@
 import uuid
 import json
 import re
-from typing import List, Dict, Tuple
 from src.config import SESSION_TTL as _SESSION_TTL, MAX_HISTORY_PAIRS as _MAX_HISTORY_PAIRS
 from src.utils.store.client import redis_client
 from src.utils.system.logger import logger
@@ -25,7 +24,7 @@ async def get_or_create_session(
     app_name: str,
     session_id: str | None = None,
     system_prompt: str | None = None,
-) -> Tuple[str, List[Dict[str, str]]]:
+) -> tuple[str, list[dict[str, str]]]:
 
     if not session_id or not re.fullmatch(r"[0-9a-f]{32}", session_id):
         session_id = None

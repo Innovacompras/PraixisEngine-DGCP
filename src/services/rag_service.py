@@ -1,8 +1,8 @@
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from src.config import MODEL_NAME as _MODEL_NAME
 from src.utils.ai_client import get_async_ai_client, record_llm_usage
-from src.utils.documents.file_parser import chunk_text
+from src.utils.file_parser import chunk_text
 from src.utils.store.sessions import get_or_create_session, persist_history
 from src.utils.concurrency import release_gpu_slot
 from src.services.llm_runner import call_llm, map_calls
@@ -26,6 +26,7 @@ async def generate_rag_answer(
     if not system_prompt:
         system_prompt = (
             "You are an expert institutional analyst. "
+            "Answer in the same language as the user. "
             "Use ONLY the provided context to answer the user's question. "
             "If the answer is not contained in the context, explain that the answer cannot be found in the document, do not fabricate any information."
         )

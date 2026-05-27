@@ -6,7 +6,7 @@ from src.controllers.admin_controller import (
     get_app_usage,
     get_health_status,
     get_redis_health,
-    get_chromadb_health,
+    get_vectordb_health,
     get_llm_health,
     get_system_stats,
     list_api_keys,
@@ -54,9 +54,9 @@ async def redis_health():
     return await get_redis_health()
 
 
-@router.get("/health/chromadb")
-async def chromadb_health():
-    return await get_chromadb_health()
+@router.get("/health/vectordb")
+async def vectordb_health():
+    return await get_vectordb_health()
 
 
 @router.get("/health/llm")

@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+chroma_data/
 
 # Virtual environments
 .venv
@@ -12,7 +13,6 @@ wheels/
 .claude
 SECURITY_TODO.md
 
-chroma_data/
 logs/
 
 .vscode

@@ -4,16 +4,35 @@ services:
     ports:
       - "8080:8080"
     env_file: .env
+    environment:
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-praixis}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-praixis}
     volumes:
-      - chroma_data:/app/chroma_data
       - ./logs:/app/logs
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/system/ping', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 30s
+      start_period: 45s
+
+  postgres:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-praixis}
+      POSTGRES_USER: ${POSTGRES_USER:-praixis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-praixis}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
-  chroma_data:
+  pgvector_data:

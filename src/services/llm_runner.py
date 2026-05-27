@@ -5,7 +5,7 @@ token usage. Streaming endpoints that acquire the GPU slot in their controller
 (chat, rag_answer) must NOT use these helpers — they would double-acquire.
 """
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from src.config import MODEL_NAME as _MODEL_NAME, CHUNK_CONCURRENCY as _CHUNK_CONCURRENCY
 from src.utils.ai_client import get_async_ai_client, record_llm_usage

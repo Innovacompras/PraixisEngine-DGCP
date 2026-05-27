@@ -1,4 +1,3 @@
-from typing import List
 from fastapi import APIRouter, Depends, File, Path, Request, UploadFile, Form
 from src.dependencies.security import verify_api_key
 from src.models.schemas import CompareRequest, EmbedRequest, QuestionRequest
@@ -68,7 +67,7 @@ router = APIRouter(
 @limiter.limit("15/minute")
 async def rag_upload_endpoint(
     request: Request,
-    files: List[UploadFile] = File(..., description="One or more .pdf, .docx, or .txt files — max 20 MB each."),
+    files: list[UploadFile] = File(..., description="One or more .pdf, .docx, or .txt files — max 20 MB each."),
     collection_name: str = Form(default="main", pattern=r"^[a-zA-Z0-9_-]{3,63}$",
                                 description="Target collection name. Defaults to 'main'."),
     chunk_size: int = Form(default=1000, ge=100, le=4000, description="Characters per chunk (100–4000)."),

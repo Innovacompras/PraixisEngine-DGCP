@@ -12,7 +12,7 @@ function _adminDashboard() {
 
     async loadHealth() {
       this.health.redis    = null;
-      this.health.chromadb = null;
+      this.health.vectordb = null;
       this.health.llm      = null;
       const load = async (svc) => {
         try {
@@ -20,7 +20,7 @@ function _adminDashboard() {
           this.health[svc] = r.ok ? (await r.json()).status : 'offline';
         } catch { this.health[svc] = 'offline'; }
       };
-      await Promise.all([load('redis'), load('chromadb'), load('llm')]);
+      await Promise.all([load('redis'), load('vectordb'), load('llm')]);
     },
 
     async loadStats() {
