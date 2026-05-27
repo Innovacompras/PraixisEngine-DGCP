@@ -16,7 +16,7 @@ A multi-tenant AI backend API that provides decoupled business logic for LLM-pow
 - **Audit Log** — Redis-backed event log tracking key generation/revocation, auth failures, file operations, and admin actions — paginated per app or globally
 - **Admin Panel** — HTTP Basic Auth-protected endpoints for provisioning/revoking API keys, wiping sessions, token usage stats, GPU monitoring, and audit log access
 - **Rate Limiting** — Per-API-key, per-endpoint request limits to protect GPU resources (falls back to IP for unauthenticated routes)
-- **Redis-backed GPU Concurrency** — Atomic slot counter shared across all workers; blocks up to `GPU_WAIT_TIMEOUT` seconds (default 30 s) waiting for a free slot, then returns `503`. Resets automatically on startup
+- **Redis-backed GPU Concurrency** — Global token bucket in Redis (BLPOP/RPUSH) enforces `GPU_CONCURRENCY` across all workers and container replicas; requests block up to `GPU_WAIT_TIMEOUT` seconds (default 30 s) for a free slot, then return `503`
 - **Usage Tracking** — Per-app prompt/completion token counters in Redis, exposed via admin endpoints
 - **Async I/O** — Fully async stack: `redis.asyncio`, `AsyncOpenAI`, ChromaDB calls offloaded via `asyncio.to_thread`
 - **Structured Output** — Optional `response_format: "json"` field on chat requests for machine-readable responses
@@ -379,17 +379,19 @@ Exceeding a limit returns HTTP `429 Too Many Requests`.
 
 ## GPU Concurrency
 
-Endpoints that call the LLM (`/chat`, `/ask`, `/file_summary`, `/summarize`, `/compare`) share a slot counter stored in Redis under the key `gpu:in_use`, sized by `GPU_CONCURRENCY` (default: `2`).
+Endpoints that call the LLM (`/chat`, `/ask`, `/file_summary`, `/summarize`, `/compare`) share a Redis-backed token bucket sized by `GPU_CONCURRENCY` (default: `2`).
 
 | Env var | Default | Description |
 |---|---|---|
-| `GPU_CONCURRENCY` | `2` | Max simultaneous LLM calls |
+| `GPU_CONCURRENCY` | `2` | Max simultaneous LLM calls (global — see below) |
 | `GPU_WAIT_TIMEOUT` | `30` | Seconds a request waits for a free slot before returning 503 |
-| `CHUNK_CONCURRENCY` | `4` | Max parallel chunk fan-out per `file_summary` map-reduce call |
+| `CHUNK_CONCURRENCY` | `4` | Max parallel chunk fan-out per `file_summary` map-reduce call (per-worker, internal) |
 
-Redis `INCR`/`DECR` are atomic, so the counter is correct across multiple uvicorn workers. When all slots are occupied, new requests block on an `asyncio.Semaphore` and wait up to `GPU_WAIT_TIMEOUT` seconds (default: `30`) for a slot to free. Only after that timeout do they return HTTP `503 Service Unavailable`. Callers may retry immediately or with a short backoff.
+Slots are tokens in a Redis list (`gpu:slots`). Acquiring a slot is `BLPOP gpu:slots <timeout>`; releasing is `RPUSH gpu:slots 1`. Because Redis is the single source of truth, **`GPU_CONCURRENCY` is a true global limit** — running uvicorn with `--workers N` or scaling to multiple container replicas behind the same Redis still caps total in-flight LLM calls at `GPU_CONCURRENCY`. When all tokens are taken, `BLPOP` blocks the request for up to `GPU_WAIT_TIMEOUT` seconds; only after that timeout does the request fail with HTTP `503 Service Unavailable`. Callers may retry immediately or with a short backoff.
 
-The counter is reset to `0` on every application startup via the FastAPI lifespan hook. If a crash leaves it stuck, use `POST /api/system/gpu/reset` to clear it manually without restarting.
+`CHUNK_CONCURRENCY` is enforced separately by an in-process `asyncio.Semaphore` inside the map-reduce pipeline and is per-worker — it limits how aggressively a single `file_summary` request fans out its chunks while it competes against other requests for the global GPU pool.
+
+On startup the lifespan hook fills the queue **only if it has not already been sized for the current `GPU_CONCURRENCY`** (guarded by a sentinel key that stores the slot count), so a multi-worker or multi-replica deploy does not multiply the slot count, and changing `GPU_CONCURRENCY` in `.env` and restarting the container correctly resizes the queue. A hard process crash that releases tokens improperly will leak slots until `POST /api/system/gpu/reset` is called — that admin endpoint rebuilds the queue atomically and is visible to every worker on its next acquire.
 
 ---
 

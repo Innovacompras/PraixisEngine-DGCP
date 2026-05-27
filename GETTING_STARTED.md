@@ -76,25 +76,27 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 
 Make sure Docker is running. The project includes a `Makefile` with two modes. `make` is built-in on macOS/Linux. On Windows, install it via [Chocolatey](https://chocolatey.org/) (`choco install make`) or use the manual commands shown below instead.
 
+Vector data is stored by embedded ChromaDB inside the API container at `/app/chroma_data` and is persisted across container restarts by the `chroma_data` named volume defined in `docker-compose.yml`. No external vector-DB service is required in either mode.
+
 ### Local stack — app + Redis in Docker
 
-Use this when you want everything self-contained on one machine. Docker boots both the app and a Redis container, wires them together, and persists data in named volumes.
+Use this when you want everything self-contained on one machine. Docker boots both the app and a Redis container, wires them together, and persists both Chroma and Redis data in named volumes.
 
 ```bash
 make up-local
 ```
 
-You do not need `REDIS_URL` in `.env` for this mode — Docker overrides it automatically to point at the Redis container.
+`REDIS_URL` is auto-overridden to point at the bundled Redis container, so you can leave it unset in `.env` for this mode. Redis is exposed on the host at `6379` for local debugging.
 
-### Distributed / production — app only
+### App-only — bring your own Redis
 
-Use this when Redis (and/or the LLM) lives on a separate server. Docker boots only the app and reads `REDIS_URL` directly from your `.env`.
+Use this when Redis (and/or the LLM) lives elsewhere (managed service, separate server, existing cluster). Docker boots **only** the API container; you are responsible for providing a reachable Redis instance.
 
 ```bash
 make up
 ```
 
-Make sure your `.env` has the correct remote URLs before running:
+Make sure your `.env` has the correct URLs before running:
 
 ```env
 AI_API_URL=http://<llm-server-ip>:8081
@@ -111,10 +113,10 @@ make down-local  # matches make up-local
 ### Manual commands (without make)
 
 ```bash
-# Local stack
+# Local stack (API + Redis)
 docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 
-# App only
+# App only (you provide REDIS_URL in .env)
 docker compose up --build
 ```
 
