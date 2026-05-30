@@ -77,7 +77,7 @@ async def query_rag_db(
     rows = await get_pool().fetch(
         HYBRID_SEARCH,
         embedding[0], app_name, collection_name,
-        max(n_results * 2, 10), _fts_query(question),
+        max(n_results * 4, 40), _fts_query(question),
         _source_filter(metadata_filter), n_results,
     )
 

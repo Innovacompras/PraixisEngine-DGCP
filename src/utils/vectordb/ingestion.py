@@ -1,10 +1,9 @@
 import asyncio
 import uuid
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-
 from src.utils.vectordb.pool import get_pool
 from src.utils.vectordb.embeddings import embed
+from src.utils.vectordb.chunking import character_chunk, semantic_chunk
 from src.utils.vectordb.constants import DELETE_FILE, INSERT_CHUNK
 
 
@@ -13,20 +12,15 @@ async def add_file_to_rag_db(
     collection_name: str,
     filename: str,
     app_name: str,
-    chunk_size: int = 1000,
+    chunk_size: int = 2000,
     chunk_overlap: int = 150,
+    chunking_strategy: str = "semantic",
 ) -> str:
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        separators=["\n\n", "\n", r"(?<=\. )", " ", ""],
-        is_separator_regex=True,
-    )
-    chunks = splitter.split_text(text)
-    # Guard against silently wiping the existing version if the splitter
-    # returns nothing. The transaction below DELETEs before INSERTing, and an
-    # empty executemany is a no-op, so without this check a "broken" re-upload
-    # would drop the prior good copy.
+    if chunking_strategy == "semantic":
+        chunks = await asyncio.to_thread(semantic_chunk, text, max_chunk_chars=chunk_size)
+    else:
+        chunks = await asyncio.to_thread(character_chunk, text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+
     if not chunks:
         raise ValueError("Document produced no chunks; nothing to ingest.")
     embeddings = await asyncio.to_thread(embed, chunks)
