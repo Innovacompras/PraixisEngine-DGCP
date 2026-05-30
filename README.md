@@ -143,6 +143,7 @@ PraixisEngine/
             ├── constants.py   # All SQL query strings
             ├── pool.py        # asyncpg connection pool lifecycle
             ├── embeddings.py  # fastembed text embedding
+            ├── chunking.py    # Semantic and character chunking strategies
             ├── collections.py # Collection & file management
             ├── ingestion.py   # Chunk & index documents
             └── retrieval.py   # Hybrid semantic + FTS search
@@ -246,8 +247,9 @@ Accepts one or more files in a single request. Re-uploading a file that already 
 |---|---|---|
 | `files` | required | One or more `.pdf`, `.docx`, or `.txt` files — max **20 MB** each |
 | `collection_name` | `"main"` | Target collection (alphanumeric/dash/underscore, 3–63 chars) |
-| `chunk_size` | `1000` | Characters per chunk (100–4000) |
-| `chunk_overlap` | `150` | Overlap characters between chunks (0–500) |
+| `chunking_strategy` | `"semantic"` | `"semantic"` — splits at natural topic boundaries using embeddings; `"character"` — fixed-size recursive splits |
+| `chunk_size` | `2000` | Maximum characters per chunk (100–4000) |
+| `chunk_overlap` | `150` | Overlap characters between chunks (0–500). Only applies when `chunking_strategy` is `"character"` |
 
 Returns per-file results:
 
